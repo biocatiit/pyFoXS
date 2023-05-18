@@ -3,7 +3,7 @@ Python version of the FoXS software
 
 \brief Determine small angle X-ray (SAXS) profiles.
 
-# foxs {#foxs_bin}
+## foxs {#foxs_bin}
 
 Determine small angle X-ray (SAXS) profiles.
 The IMP.saxs module contains functions that, given an atomic protein structure,
@@ -16,7 +16,7 @@ available.
 _Examples_:
  - [Determination of a Nup133 structure](@ref foxs_nup133)
 
-# Info
+## Info
 
 _Author(s)_: Dina Schneidman
 

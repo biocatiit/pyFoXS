@@ -6,6 +6,7 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
 from .ColorCoder import ColorCoder
+import IMP.saxs
 
 class Gnuplot:
     @staticmethod
@@ -26,7 +27,7 @@ class Gnuplot:
 
     @staticmethod
     def print_profile_script(pdbs):
-        ColorCoder.set_number(len(pdbs))
+        # ColorCoder.set_number(len(pdbs))
         hex_color = "#ZZZZZZ"
         with open("profiles.plt", "w") as plt_file:
             plt_file.write("set terminal png enhanced;set output \"profiles.png\"\n")
@@ -48,7 +49,7 @@ class Gnuplot:
 
     @staticmethod
     def print_canvas_script(pdbs, max_num):
-        ColorCoder.set_number(len(pdbs))
+        # ColorCoder.set_number(len(pdbs))
         hex_color = "#ZZZZZZ"
         with open("canvas.plt", "w") as plt_file:
             plt_file.write("set terminal canvas solid butt size 400,350 fsize 10 lw 1.5 "
@@ -74,8 +75,8 @@ class Gnuplot:
 
     @staticmethod
     def print_fit_script(fp):
-        pdb_name = saxs.trim_extension(fp.get_pdb_file_name())
-        profile_name = saxs.trim_extension(os.path.basename(fp.get_profile_file_name()))
+        pdb_name = IMP.saxs.trim_extension(fp.get_pdb_file_name())
+        profile_name = IMP.saxs.trim_extension(os.path.basename(fp.get_profile_file_name()))
         plt_file_name = pdb_name + "_" + profile_name + ".plt"
         png_file_name = pdb_name + "_" + profile_name + ".png"
         eps_file_name = pdb_name + "_" + profile_name + ".eps"
@@ -133,7 +134,7 @@ class Gnuplot:
 
 
     def print_fit_script(fps):
-        ColorCoder.set_number(len(fps))
+        # ColorCoder.set_number(len(fps))
         hex_color = "#ZZZZZZ"
         plt_file = open("fit.plt", "w")
 
@@ -154,8 +155,8 @@ class Gnuplot:
         plt_file.write("plot f(x) notitle lc rgb '#333333'")
         for i in range(len(fps)):
             hex_color = ColorCoder.html_hex_color(i)
-            pdb_name = saxs.trim_extension(fps[i].get_pdb_file_name())
-            profile_name = saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
+            pdb_name = IMP.saxs.trim_extension(fps[i].get_pdb_file_name())
+            profile_name = IMP.saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
             fit_file_name = f"{pdb_name}_{profile_name}.fit"
             plt_file.write(f", '{fit_file_name}' u 1:(($2-$4)/$3) notitle w lines lw 2.5 lc rgb '#{hex_color}'")
         plt_file.write("\n")
@@ -167,8 +168,8 @@ class Gnuplot:
         plt_file.write("set format y \"10^{%L}\"; set logscale y\n")
         for i in range(len(fps)):
             hex_color = ColorCoder.html_hex_color(i)
-            pdb_name = saxs.trim_extension(fps[i].get_pdb_file_name())
-            profile_name = saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
+            pdb_name = IMP.saxs.trim_extension(fps[i].get_pdb_file_name())
+            profile_name = IMP.saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
             fit_file_name = f"{pdb_name}_{profile_name}.fit"
             if i == 0:
                 plt_file.write(f"plot '{fit_file_name}' u 1:2 t 'Experimental' lc rgb '#333333' pt 6 ps 0.8 ")
@@ -179,7 +180,7 @@ class Gnuplot:
         plt_file.close()
 
     def print_canvas_script(fps, max_num):
-        ColorCoder.set_number(len(fps))
+        # ColorCoder.set_number(len(fps))
         hex_color = "#ZZZZZZ"
         plt_file = open("canvas.plt", "w")
 
@@ -199,8 +200,8 @@ class Gnuplot:
         plt_file.write("plot f(x) lc rgb '#333333'")
         for i in range(min(len(fps), max_num)):
             hex_color = ColorCoder.html_hex_color(i)
-            pdb_name = saxs.trim_extension(fps[i].get_pdb_file_name())
-            profile_name = saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
+            pdb_name = IMP.saxs.trim_extension(fps[i].get_pdb_file_name())
+            profile_name = IMP.saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
             fit_file_name = f"{pdb_name}_{profile_name}.fit"
             plt_file.write(f", '{fit_file_name}' u 1:(($2-$4)/$3) w lines lw 2.5 lc rgb '#{hex_color}'")
         plt_file.write("\n")
@@ -211,8 +212,8 @@ class Gnuplot:
                     "set format y '10^{%L}'; set logscale y\n")
         for i in range(min(len(fps), max_num)):
             hex_color = ColorCoder.html_hex_color(i)
-            pdb_name = saxs.trim_extension(fps[i].get_pdb_file_name())
-            profile_name = saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
+            pdb_name = IMP.saxs.trim_extension(fps[i].get_pdb_file_name())
+            profile_name = IMP.saxs.trim_extension(os.path.basename(fps[i].get_profile_file_name()))
             fit_file_name = f"{pdb_name}_{profile_name}.fit"
             if i == 0:
                 plt_file.write(f"plot '{fit_file_name}' u 1:2 lc rgb '#333333' pt 6 ps 0.8 ")

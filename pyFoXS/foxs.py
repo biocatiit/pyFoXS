@@ -2,24 +2,16 @@
 This is the program for SAXS profile computation and fitting.
 see FOXS for webserver (salilab.org/foxs)
 """
-   
 
-#include <IMP/foxs/internal/Gnuplot.h>
-#include <IMP/foxs/internal/JmolWriter.h>
-
-#include <IMP/saxs/Profile.h>
-#include <IMP/saxs/ProfileFitter.h>
-#include <IMP/saxs/ChiScoreLog.h>
-#include <IMP/saxs/ChiFreeScore.h>
-#include <IMP/saxs/RatioVolatilityScore.h>
-#include <IMP/saxs/FormFactorTable.h>
-#include <IMP/saxs/utility.h>
-
-#include <boost/program_options.hpp>
-
+import sys
 import argparse
+import IMP.saxs
+from src.internal.Gnuplot import *
+from src.internal.JmolWriter import *
+from src.internal.utils import *
 
-def main(argc, **argv):
+def main():
+    __version__ = "0.1"
     profile_size = 500
     max_q = 0.0 # change after read
     min_c1 = 0.99
@@ -48,8 +40,7 @@ def main(argc, **argv):
     print("Usage: <pdb_file1> <pdb_file2> ... <profile_file1> <profile_file2> ...\n"
       "\nAny number of input PDBs and profiles is supported.\n"
       "Each PDB will be fitted against each profile.\n\n"
-      "This program is part of IMP, the Integrative Modeling Platform,\n"
-      "which is ")
+      "This program is part of IMP, the Integrative Modeling Platform.")
 
     hidden = argparse.ArgumentParser(add_help=False)
     hidden.add_argument("input_files", nargs="*", help="input PDB and profile files")
@@ -62,8 +53,7 @@ def main(argc, **argv):
     hidden.add_argument("--chi_free", help="compute chi-free instead of chi, specify iteration number (default = 0)", type=int, default=chi_free)
     hidden.add_argument("--pr_dmax", help="Dmax value for P(r) calculation. P(r) is calculated only if pr_dmax > 0", type=float, default=pr_dmax)
 
-    parser = argparse.ArgumentParser(description=desc_prefix + IMP.get_copyright() + ".\n\nOptions", parents=[hidden])
-    parser.add_argument("--help", help="Show command line arguments and exit.", action="store_true")
+    parser = argparse.ArgumentParser(description=desc_prefix + ".\n\nOptions", parents=[hidden])
     parser.add_argument("--version", help="Show version info and exit.", action="store_true")
     parser.add_argument("--profile_size", "-s", help="number of points in the profile", type=int, default=profile_size)
     parser.add_argument("--max_q", "-q", help="max q value", type=float, default=max_q)
@@ -71,7 +61,7 @@ def main(argc, **argv):
     parser.add_argument("--max_c1", help="max c1 value", type=float, default=max_c1)
     parser.add_argument("--min_c2", help="min c2 value", type=float, default=min_c2)
     parser.add_argument("--max_c2", help="max c2 value", type=float, default=max_c2)
-    parser.add_argument("--hydrogens", "-h", help="explicitly consider hydrogens in PDB files (default = False)", action="store_true")
+    parser.add_argument("--hydrogens", "-hyd", help="explicitly consider hydrogens in PDB files (default = False)", action="store_true")
     parser.add_argument("--residues", "-r", help="fast coarse grained calculation using CA atoms only (default = False)", action="store_true")
     parser.add_argument("--background_q", "-b", help="background adjustment, not used by default. if enabled, recommended q value is 0.2", type=float, default=background_adjustment_q)
     parser.add_argument("--offset", "-o", help="use offset in fitting (default = False)", action="store_true")
@@ -85,7 +75,7 @@ def main(argc, **argv):
     args = parser.parse_args()
 
     if args.version:
-        print(f"Version: \"{get_module_version()}\"")
+        print(f"Version: \"{__version__}\"")
         return 0
 
     fit = True
@@ -96,7 +86,7 @@ def main(argc, **argv):
     if args.input_files:
         files = args.input_files
 
-    if args.help or not files:
+    if not files:
         print(parser)
         return 0
 
@@ -152,17 +142,17 @@ def main(argc, **argv):
     # IMP::benchmark::Profiler pp("prof_out");
 
     # determine form factor type
-    ff_type = FormFactorType.HEAVY_ATOMS
+    ff_type = IMP.saxs.HEAVY_ATOMS
 
     if not heavy_atoms_only:
-        ff_type = FormFactorType.ALL_ATOMS
+        ff_type = IMP.saxs.ALL_ATOMS
 
     if residue_level:
-        ff_type = FormFactorType.CA_ATOMS
+        ff_type = IMP.saxs.CA_ATOMS
 
     # 1. read pdbs and profiles, prepare particles
     particles_vec = []
-    exp_profiles = Profiles()
+    exp_profiles = []
     m = IMP.Model()
 
     read_files(m, files, pdb_files, dat_files, particles_vec, exp_profiles,
@@ -192,17 +182,17 @@ def main(argc, **argv):
 
     if len(form_factor_table_file) > 0:
         # reciprocal space calculation, requires form factor file
-        ft = FormFactorTable(form_factor_table_file, 0.0, max_q, delta_q)
+        ft = IMP.saxs.FormFactorTable(form_factor_table_file, 0.0, max_q, delta_q)
         reciprocal = True
     else:
-        ft = get_default_form_factor_table()
+        ft = IMP.saxs.get_default_form_factor_table()
 
     # 2. compute profiles for input pdbs
-    profiles = Profiles()
+    profiles = []
     fps = []
 
     for i in range(len(particles_vec)):
-        print("Computing profile for", pdb_files[i], particles_vec[i].size(), "atoms")
+        print("Computing profile for", pdb_files[i], len(particles_vec[i]), "atoms")
         profile = compute_profile(particles_vec[i], 0.0, max_q, delta_q, ft, ff_type,
                                 not explicit_water, fit, reciprocal, ab_initio, vacuum,
                                 beam_profile_file)
@@ -221,7 +211,7 @@ def main(argc, **argv):
 
         # calculate P(r)
         if pr_dmax > 0.0:
-            pr = RadialDistributionFunction(0.5)
+            pr = IMP.saxs.RadialDistributionFunction(0.5)
             profile.profile_2_distribution(pr, pr_dmax)
             pr.normalize()
             pr_file_name = pdb_files[i] + ".pr"
@@ -234,27 +224,27 @@ def main(argc, **argv):
             fit_file_name2 = trim_extension(pdb_files[i]) + "_" + \
                 trim_extension(os.path.basename(dat_files[j])) + ".dat"
 
-            fp = FitParameters()
+            fp = IMP.saxs.FitParameters()
             if score_log:
-                pf = ProfileFitter(ChiScoreLog(exp_saxs_profile))
+                pf = IMP.saxs.ProfileFitterChiLog(exp_saxs_profile)
                 fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                     use_offset, fit_file_name2)
             else:
                 if vr_score:
-                    pf = ProfileFitter(RatioVolatilityScore(exp_saxs_profile))
+                    pf = IMP.saxs.ProfileFitterRatioVolatility(exp_saxs_profile)
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                 else:
-                    pf = ProfileFitter(ChiScore(exp_saxs_profile))
+                    pf = IMP.saxs.ProfileFitterChi(exp_saxs_profile)
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                     if chi_free > 0:
-                        dmax = compute_max_distance(particles_vec[i])
+                        dmax = IMP.saxs.compute_max_distance(particles_vec[i])
                         ns = int(round(exp_saxs_profile.get_max_q() * dmax / math.pi))
                         K = chi_free
-                        cfs = ChiFreeScore(ns, K)
+                        cfs = IMP.saxs.ChiFreeScore(ns, K)
                         cfs.set_was_used(True)
-                        resampled_profile = Profile(exp_saxs_profile.get_min_q(), exp_saxs_profile.get_max_q(),
+                        resampled_profile = IMP.saxs.Profile(exp_saxs_profile.get_min_q(), exp_saxs_profile.get_max_q(),
                                                     exp_saxs_profile.get_delta_q())
                         pf.resample(profile, resampled_profile)
                         chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile)
@@ -267,7 +257,7 @@ def main(argc, **argv):
                 Gnuplot.print_fit_script(fp)
             fps.append(fp)
 
-    fps.sort(key=lambda x: x.compare_fit_parameters())
+    fps.sort(key=lambda x: x.get_score())
 
     if len(pdb_files) > 1 and gnuplot_script:
         Gnuplot.print_profile_script(pdb_files)
@@ -284,3 +274,5 @@ def main(argc, **argv):
 
     return 0
 
+if __name__ == "__main__":
+    main()

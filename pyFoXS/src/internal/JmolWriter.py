@@ -4,6 +4,9 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
+from .ColorCoder import *
+import IMP.saxs
+
 class JmolWriter:
     display_selection_ = "frame 0#;restrict selection;\
         select selection and (protein, nucleic); ribbons only;\
@@ -37,7 +40,6 @@ class JmolWriter:
             show_all_checkbox_str = JmolWriter.show_all_checkbox(model_num, True)
 
             outstream.precision(2)
-            outstream.setf(std.ios.fixed, std::ios.floatfield)
             # output table
             showMolecule = True
             hex_color = "ZZZZZZ"
