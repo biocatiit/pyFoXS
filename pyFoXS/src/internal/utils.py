@@ -3,19 +3,21 @@ This is the program for SAXS profile computation and fitting.
 see FOXS for webserver (salilab.org/foxs)
 """
 
-import IMP
-import IMP.saxs
 import os
+import IMP
+from IMP.saxs import *
+from .Profile import Profile
 
 def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file):
-    profile = IMP.saxs.Profile(min_q, max_q, delta_q)
+    profile = Profile(qmin=min_q, qmax=max_q, delta=delta_q, constructor=0)
+    # profile = Profile(min_q, max_q, delta_q)
     if reciprocal:
-        profile.set_ff_table(ft)
+        profile.ff_table_ = ft
     if len(beam_profile_file) > 0:
-        profile.set_beam_profile(beam_profile_file)
+        profile.beam_profile_ = beam_profile_file
 
     surface_area = []
-    s = IMP.saxs.SolventAccessibleSurface()
+    s = SolventAccessibleSurface()
     average_radius = 0.0
     if hydration_layer:
         for particle in particles:
@@ -24,7 +26,7 @@ def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_lay
             average_radius += radius
         surface_area = s.get_solvent_accessibility(IMP.core.XYZRs(particles))
         average_radius /= len(particles)
-        profile.set_average_radius(average_radius)
+        profile.average_radius_ = average_radius
 
     if not fit:
         if ab_initio:
@@ -92,7 +94,8 @@ def read_files(m, files, pdb_file_names, dat_files, particles_vec, exp_profiles,
             read_pdb(m, file, pdb_file_names, particles_vec, residue_level, heavy_atoms_only, multi_model_pdb, explicit_water)
         except IMP.ValueException:  # not a pdb file
             # 2. try as a dat profile file
-            profile = IMP.saxs.Profile(file, False, max_q, units)
+            profile = Profile(file_name=file, fit_file=False, max_q=max_q, units=units, constructor=1)
+            # profile = Profile(file, False, max_q, units)
             if profile.size() == 0:
                 print("Can't parse input file " + file)
                 return

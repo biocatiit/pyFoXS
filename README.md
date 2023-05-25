@@ -3,6 +3,46 @@ Python version of the FoXS software
 
 \brief Determine small angle X-ray (SAXS) profiles.
 
+## Installation
+
+First, you need to install the IMP library:
+```
+conda install -c conda-forge imp
+```
+
+You can then run the foxs.py file like a normal python file:
+```
+python foxs.py examples/nup133/3KFO.pdb examples/nup133/23922_merge.dat
+```
+
+## IMP Code and build
+
+This is not needed, it is only if you want to access the C++ code.
+
+First, you need to download the IMP library. Two possibilities:
+
+- Download the source code tarball from our download page, then extract it with something like:
+`tar -xvzf ../imp-<version>.tar.gz`
+- Alternatively you can use git to get the code directly from our GitHub repository with something like:
+```
+git clone -b main https://github.com/salilab/imp.git
+(cd imp && git submodule update --init && ./setup_git.py)
+```
+
+Then, you need to build/install it for python:
+
+To build IMP source found in `path/to/imp-source` and install it in
+`path_to_install` do:
+
+1. `mkdir build && cd build`
+2. `cmake path/to/imp-source -DCMAKE_INSTALL_PREFIX=path_to_install`
+3. `make -j4`
+4. `make install`
+
+Everything about IMP and how to download/compile it is here: [https://integrativemodeling.org/nightly/doc/manual/installation.html](https://integrativemodeling.org/nightly/doc/manual/installation.html).
+
+Then you can run pyFoXS/foxs.py like a normal python file.
+
 ## foxs {#foxs_bin}
 
 Determine small angle X-ray (SAXS) profiles.

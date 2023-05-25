@@ -5,10 +5,12 @@ see FOXS for webserver (salilab.org/foxs)
 
 import sys
 import argparse
-import IMP.saxs
+from IMP.saxs import *
 from src.internal.Gnuplot import *
 from src.internal.JmolWriter import *
 from src.internal.utils import *
+from src.internal.Profile import Profile
+from src.internal.ProfileFitter import *
 
 def main():
     __version__ = "0.1"
@@ -21,7 +23,6 @@ def main():
     heavy_atoms_only = True
     residue_level = False
     background_adjustment_q = 0.0
-    desc_prefix = ""
     use_offset = False
     write_partial_profile = False
     multi_model_pdb = 1
@@ -30,6 +31,7 @@ def main():
     score_log = False
     gnuplot_script = False
     explicit_water = False
+    desc_prefix = ""
     form_factor_table_file = ""
     beam_profile_file = ""
     ab_initio = False
@@ -37,10 +39,6 @@ def main():
     javascript = False
     chi_free = 0
     pr_dmax = 0.0
-    print("Usage: <pdb_file1> <pdb_file2> ... <profile_file1> <profile_file2> ...\n"
-      "\nAny number of input PDBs and profiles is supported.\n"
-      "Each PDB will be fitted against each profile.\n\n"
-      "This program is part of IMP, the Integrative Modeling Platform.")
 
     hidden = argparse.ArgumentParser(add_help=False)
     hidden.add_argument("input_files", nargs="*", help="input PDB and profile files")
@@ -75,8 +73,14 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print(f"Version: \"{__version__}\"")
+        print(f"IMP Version: {IMP.__version__}")
+        print(f"pyFoXS Version: {__version__}")
         return 0
+
+    print("Usage: <pdb_file1> <pdb_file2> ... <profile_file1> <profile_file2> ...\n"
+      "\nAny number of input PDBs and profiles is supported.\n"
+      "Each PDB will be fitted against each profile.\n\n"
+      "This program is part of IMP, the Integrative Modeling Platform.\n")
 
     fit = True
     files = []
@@ -87,7 +91,7 @@ def main():
         files = args.input_files
 
     if not files:
-        print(parser)
+        print("WARNING: You need to specify a file to the program.\n")
         return 0
 
     if args.hydrogens:
@@ -142,13 +146,13 @@ def main():
     # IMP::benchmark::Profiler pp("prof_out");
 
     # determine form factor type
-    ff_type = IMP.saxs.HEAVY_ATOMS
+    ff_type = HEAVY_ATOMS
 
     if not heavy_atoms_only:
-        ff_type = IMP.saxs.ALL_ATOMS
+        ff_type = ALL_ATOMS
 
     if residue_level:
-        ff_type = IMP.saxs.CA_ATOMS
+        ff_type = CA_ATOMS
 
     # 1. read pdbs and profiles, prepare particles
     particles_vec = []
@@ -169,8 +173,10 @@ def main():
     if max_q == 0.0:
         if len(exp_profiles) > 0:
             for profile in exp_profiles:
-                if profile.get_max_q() > max_q:
-                    max_q = profile.get_max_q()
+                if profile.max_q_ > max_q:
+                    max_q = profile.max_q_
+                # if profile.get_max_q() > max_q:
+                #     max_q = profile.get_max_q()
         else:
             max_q = 0.5
 
@@ -182,10 +188,10 @@ def main():
 
     if len(form_factor_table_file) > 0:
         # reciprocal space calculation, requires form factor file
-        ft = IMP.saxs.FormFactorTable(form_factor_table_file, 0.0, max_q, delta_q)
+        ft = FormFactorTable(form_factor_table_file, 0.0, max_q, delta_q)
         reciprocal = True
     else:
-        ft = IMP.saxs.get_default_form_factor_table()
+        ft = get_default_form_factor_table()
 
     # 2. compute profiles for input pdbs
     profiles = []
@@ -211,7 +217,7 @@ def main():
 
         # calculate P(r)
         if pr_dmax > 0.0:
-            pr = IMP.saxs.RadialDistributionFunction(0.5)
+            pr = RadialDistributionFunction(0.5)
             profile.profile_2_distribution(pr, pr_dmax)
             pr.normalize()
             pr_file_name = pdb_files[i] + ".pr"
@@ -223,29 +229,29 @@ def main():
             exp_saxs_profile = exp_profiles[j]
             fit_file_name2 = trim_extension(pdb_files[i]) + "_" + \
                 trim_extension(os.path.basename(dat_files[j])) + ".dat"
-
-            fp = IMP.saxs.FitParameters()
+            fp = FitParameters()
             if score_log:
-                pf = IMP.saxs.ProfileFitterChiLog(exp_saxs_profile)
+                pf = ProfileFitterChiLog(exp_saxs_profile)
                 fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                     use_offset, fit_file_name2)
             else:
                 if vr_score:
-                    pf = IMP.saxs.ProfileFitterRatioVolatility(exp_saxs_profile)
+                    pf = ProfileFitterRatioVolatility(exp_saxs_profile)
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                 else:
-                    pf = IMP.saxs.ProfileFitterChi(exp_saxs_profile)
+                    pf = ProfileFitter(exp_saxs_profile)
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                     if chi_free > 0:
-                        dmax = IMP.saxs.compute_max_distance(particles_vec[i])
-                        ns = int(round(exp_saxs_profile.get_max_q() * dmax / math.pi))
+                        dmax = compute_max_distance(particles_vec[i])
+                        ns = int(round(exp_saxs_profile.max_q_ * dmax / math.pi))
                         K = chi_free
-                        cfs = IMP.saxs.ChiFreeScore(ns, K)
+                        cfs = ChiFreeScore(ns, K)
                         cfs.set_was_used(True)
-                        resampled_profile = IMP.saxs.Profile(exp_saxs_profile.get_min_q(), exp_saxs_profile.get_max_q(),
-                                                    exp_saxs_profile.get_delta_q())
+                        resampled_profile = Profile(qmin=exp_saxs_profile.min_q_, qmax=exp_saxs_profile.max_q_,
+                                                    delat=exp_saxs_profile.delta_q_, constructor=0)
+
                         pf.resample(profile, resampled_profile)
                         chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile)
                         fp.set_chi_square(chi_free)
