@@ -4,7 +4,7 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
-from IMP.saxs import *
+from IMP.saxs import FitParameters
 from IMP import Object
 
 from .Profile import Profile
@@ -18,13 +18,13 @@ class ProfileFitter(Object):
 
     def compute_scale_factor(self, model_profile, offset=0.0):
         return self.scoring_function_.compute_scale_factor(self.exp_profile_, model_profile, offset)
-    
+
     def compute_offset(self, model_profile):
         return self.scoring_function_.compute_offset(self.exp_profile_, model_profile)
 
     def get_profile(self):
         return self.exp_profile_
-    
+
     def resample(self, model_profile, resampled_profile):
         model_profile.resample(self.exp_profile_, resampled_profile)
 
@@ -82,7 +82,7 @@ class ProfileFitter(Object):
         default_c2 = 0.0
         partial_profile.sum_partial_profiles(default_c1, default_c2)
         default_chi = self.compute_score(partial_profile, use_offset)
-        #print(default_chi)
+
         fp = self.search_fit_parameters(partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, float('inf'))
         best_c1 = fp.get_c1()
         best_c2 = fp.get_c2()
@@ -111,7 +111,6 @@ class ProfileFitter(Object):
         return score
 
     def write_SAXS_fit_file(self, file_name, model_profile, score, c, offset):
-        
         with open(file_name, "w") as out_file:
             profile_size = min(model_profile.size(), self.exp_profile_.size())
             # header line
@@ -152,4 +151,3 @@ class ProfileFitter(Object):
                 out_file2.write("{:<15.8f} ".format(self.exp_profile_.intensity_[i]))
                 out_file2.write("{:<10.8f} ".format(self.exp_profile_.error_[i]))
                 out_file2.write("{:<15.8f}\n".format(model_profile.intensity_[i] * c - offset))
-

@@ -5,7 +5,9 @@ see FOXS for webserver (salilab.org/foxs)
 
 import os
 import IMP
-from IMP.saxs import *
+from IMP.core import XYZR, XYZRs
+from IMP.atom import CAlphaPDBSelector, NonHydrogenPDBSelector, NonWaterNonHydrogenPDBSelector, NonAlternativePDBSelector, NonWaterPDBSelector, read_pdb_or_mmcif, get_by_type, read_multimodel_pdb_or_mmcif, ATOM_TYPE
+from IMP.saxs import SolventAccessibleSurface
 from .Profile import Profile
 
 def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file):
@@ -22,15 +24,15 @@ def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_lay
     if hydration_layer:
         for particle in particles:
             radius = ft.get_radius(particle, ff_type)
-            IMP.core.XYZR.setup_particle(particle, radius)
+            XYZR.setup_particle(particle, radius)
             average_radius += radius
-        surface_area = s.get_solvent_accessibility(IMP.core.XYZRs(particles))
+        surface_area = s.get_solvent_accessibility(XYZRs(particles))
         average_radius /= len(particles)
         profile.average_radius_ = average_radius
 
     if not fit:
         if ab_initio:
-            profile.calculate_profile_constant_form_factor(particles)
+            profile.calculate_profile_constant_form_factor(particles, ft)
         elif vacuum:
             profile.calculate_profile_partial(particles, surface_area, ff_type)
             profile.sum_partial_profiles(0.0, 0.0)
@@ -40,6 +42,7 @@ def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_lay
         if reciprocal:
             profile.calculate_profile_reciprocal_partial(particles, surface_area, ff_type)
         else:
+            # default use
             profile.calculate_profile_partial(particles, surface_area, ff_type)
 
     return profile
@@ -48,30 +51,30 @@ def read_pdb(model, file, pdb_file_names, particles_vec, residue_level, heavy_at
     mhds = []
     selector = None
     if residue_level:
-        selector = IMP.atom.CAlphaPDBSelector()
+        selector = CAlphaPDBSelector()
     elif heavy_atoms_only:
         if explicit_water:
-            selector = IMP.atom.NonHydrogenPDBSelector()
+            selector = NonHydrogenPDBSelector()
         else:
-            selector = IMP.atom.NonWaterNonHydrogenPDBSelector()
+            selector = NonWaterNonHydrogenPDBSelector()
     else:
         if explicit_water:
-            selector = IMP.atom.NonAlternativePDBSelector()
+            selector = NonAlternativePDBSelector()
         else:
-            selector = IMP.atom.NonWaterPDBSelector()
+            selector = NonWaterPDBSelector()
 
     if multi_model_pdb == 2:
         mhds = read_multimodel_pdb_or_mmcif(file, model, selector, True)
     else:
         if multi_model_pdb == 3:
-            mhd = IMP.atom.read_pdb_or_mmcif(file, model, selector, False, True)
+            mhd = read_pdb_or_mmcif(file, model, selector, False, True)
             mhds.append(mhd)
         else:
-            mhd = IMP.atom.read_pdb_or_mmcif(file, model, selector, True, True)
+            mhd = read_pdb_or_mmcif(file, model, selector, True, True)
             mhds.append(mhd)
 
     for h_index in range(len(mhds)):
-        ps = IMP.atom.get_by_type(mhds[h_index], IMP.atom.ATOM_TYPE)
+        ps = get_by_type(mhds[h_index], ATOM_TYPE)
         if len(ps) > 0:
             pdb_id = file
             if len(mhds) > 1:
@@ -87,7 +90,7 @@ def read_files(m, files, pdb_file_names, dat_files, particles_vec, exp_profiles,
     for file in files:
         # check if file exists
         if not os.path.exists(file):
-            IMP.IMP_WARN("Can't open file " + file)
+            print("Can't open file " + file)
             return
         # 1. try as pdb or mmcif
         try:

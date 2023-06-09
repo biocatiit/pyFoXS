@@ -5,12 +5,12 @@ see FOXS for webserver (salilab.org/foxs)
 
 import sys
 import argparse
-from IMP.saxs import *
+from IMP.saxs import FitParameters, HEAVY_ATOMS, CA_ATOMS, ALL_ATOMS, get_default_form_factor_table
 from src.internal.Gnuplot import *
 from src.internal.JmolWriter import *
 from src.internal.utils import *
 from src.internal.Profile import Profile
-from src.internal.ProfileFitter import *
+from src.internal.ProfileFitter import ProfileFitter
 
 def main():
     __version__ = "0.1"
@@ -18,8 +18,8 @@ def main():
     max_q = 0.0 # change after read
     min_c1 = 0.99
     max_c1 = 1.05
-    min_c2 = -0.5
-    max_c2 = 2.0
+    min_c2 = -2.0
+    max_c2 = 4.0
     heavy_atoms_only = True
     residue_level = False
     background_adjustment_q = 0.0
@@ -129,7 +129,7 @@ def main():
     if args.volatility_ratio:
         vr_score = True
 
-    if multi_model_pdb != 1 and multi_model_pdb != 2 and multi_model_pdb != 3:
+    if multi_model_pdb not in (1, 2, 3):
         print(f"Incorrect option for multi_model_pdb {multi_model_pdb}")
         print("Use 1 to read first MODEL only")
         print("    2 to read each MODEL into a separate structure,")
@@ -137,7 +137,7 @@ def main():
         print("Default value of 1 is used")
         multi_model_pdb = 1
 
-    if units != 1 and units != 2 and units != 3:
+    if units not in (1, 2, 3):
         print(f"Incorrect option for units {units}")
         print("Use 1 for unknown units, 2 for 1/A, 3 for 1/nm")
         print("Default value of 1 is used")
@@ -162,7 +162,9 @@ def main():
     read_files(m, files, pdb_files, dat_files, particles_vec, exp_profiles,
             residue_level, heavy_atoms_only, multi_model_pdb, explicit_water,
             max_q, units)
-
+    
+    max_q = 0.5
+    
     if background_adjustment_q > 0.0:
         for profile in exp_profiles:
             profile.background_adjust(background_adjustment_q)
@@ -197,9 +199,9 @@ def main():
     profiles = []
     fps = []
 
-    for i in range(len(particles_vec)):
-        print("Computing profile for", pdb_files[i], len(particles_vec[i]), "atoms")
-        profile = compute_profile(particles_vec[i], 0.0, max_q, delta_q, ft, ff_type,
+    for i, part in enumerate(particles_vec):
+        print("Computing profile for", pdb_files[i], len(part), "atoms")
+        profile = compute_profile(part, 0.0, max_q, delta_q, ft, ff_type,
                                 not explicit_water, fit, reciprocal, ab_initio, vacuum,
                                 beam_profile_file)
 
@@ -225,10 +227,10 @@ def main():
                 pr.show(pr_file)
 
         # 3. fit experimental profiles
-        for j in range(len(dat_files)):
+        for j, dat_file in enumerate(dat_files):
             exp_saxs_profile = exp_profiles[j]
             fit_file_name2 = trim_extension(pdb_files[i]) + "_" + \
-                trim_extension(os.path.basename(dat_files[j])) + ".dat"
+                trim_extension(os.path.basename(dat_file)) + ".dat"
             fp = FitParameters()
             if score_log:
                 pf = ProfileFitterChiLog(exp_saxs_profile)
@@ -250,13 +252,13 @@ def main():
                         cfs = ChiFreeScore(ns, K)
                         cfs.set_was_used(True)
                         resampled_profile = Profile(qmin=exp_saxs_profile.min_q_, qmax=exp_saxs_profile.max_q_,
-                                                    delat=exp_saxs_profile.delta_q_, constructor=0)
+                                                    delta=exp_saxs_profile.delta_q_, constructor=0)
 
                         pf.resample(profile, resampled_profile)
                         chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile)
                         fp.set_chi_square(chi_free)
             fp.set_pdb_file_name(pdb_files[i])
-            fp.set_profile_file_name(dat_files[j])
+            fp.set_profile_file_name(dat_file)
             fp.set_mol_index(i)
             fp.show(sys.stdout)
             if gnuplot_script:

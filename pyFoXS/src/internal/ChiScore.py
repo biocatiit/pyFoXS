@@ -28,10 +28,10 @@ class ChiScore(Object):
         if use_offset:
             delta += offset
 
-        for i in range(len(delta)):
+        for i, d in enumerate(delta):
             # Exclude the uncertainty originated from limitation of floating number
-            if np.fabs(delta[i] / exp_intensities[i]) >= 1.0e-15:
-                chi_square += np.square(delta[i]) / np.square(errors[i])
+            if np.fabs(d / exp_intensities[i]) >= 1.0e-15:
+                chi_square += np.square(d) / np.square(errors[i])
 
         chi_square /= profile_size
         return chi_square
@@ -79,5 +79,3 @@ class ChiScore(Object):
         offset = -sum1 / sum2
 
         return offset
-
-

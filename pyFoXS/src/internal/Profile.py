@@ -4,14 +4,13 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
+import copy
 import math
 import numpy as np
 from scipy.optimize import curve_fit
-from IMP.saxs import *
-from IMP.algebra import *
-import IMP.core
+from IMP.saxs import get_default_form_factor_table, RadialDistributionFunction, HEAVY_ATOMS, CA_ATOMS
+from IMP.core import XYZ
 from IMP import Object
-import copy
 
 IMP_SAXS_DELTA_LIMIT = 1.0e-15
 
@@ -58,8 +57,7 @@ class Profile(Object):
                 self.q_[i] = self.min_q_ + i * self.delta_q_
 
         if partial_profiles_size > 0 and not hasattr(self, "partial_profiles_"):
-            self.partial_profiles_ = []
-            self.partial_profiles_.extend([np.zeros(number_of_q_entries, dtype=np.float32)] * partial_profiles_size)
+            self.partial_profiles_ = [np.zeros(number_of_q_entries, dtype=np.float32) for _ in range(partial_profiles_size)]
 
     def find_max_q(self, file_name):
         with open(file_name, 'r') as in_file:
@@ -271,7 +269,7 @@ class Profile(Object):
     def calculate_profile_real(self, particles, ff_type):
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()  # fi(0) fj(0)
-        coordinates = [IMP.core.XYZ(particle.get_particle()).get_coordinates() for particle in particles]
+        coordinates = [XYZ(particle.get_particle()).get_coordinates() for particle in particles]
         form_factors = [self.ff_table_.get_form_factor(particle, ff_type) for particle in particles]
 
         # iterate over pairs of atoms
@@ -295,7 +293,7 @@ class Profile(Object):
     def calculate_profile_constant_form_factor(self, particles, form_factor):
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()
-        coordinates = [IMP.core.XYZ(particle.get_particle()).get_coordinates() for particle in particles]
+        coordinates = [XYZ(particle.get_particle()).get_coordinates() for particle in particles]
         ff = math.pow(form_factor, 2)
 
         # iterate over pairs of atoms
@@ -311,14 +309,14 @@ class Profile(Object):
 
     def calculate_profile_partial(self, particles, surface, ff_type):
         print("start real partial profile calculation for {} particles\n".format(len(particles)))
-        coordinates = [IMP.core.XYZ(particle.get_particle()).get_coordinates() for particle in particles]
+        coordinates = [XYZ(particle.get_particle()).get_coordinates() for particle in particles]
         vacuum_ff = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles]
         dummy_ff = [self.ff_table_.get_dummy_form_factor(particle, ff_type) for particle in particles]
         water_ff = None
 
         if len(surface) == len(particles):
             water_ff = [surface[i] * self.ff_table_.get_water_form_factor() for i in range(len(particles))]
-
+  
         r_size = 3
         if len(surface) == len(particles):
             r_size = 6
@@ -358,8 +356,8 @@ class Profile(Object):
     def calculate_profile_partial(self, particles1, particles2, surface1, surface2, ff_type):
         print("start real partial profile calculation for {} particles + {}\n".format(len(particles1), len(particles2)))
         
-        coordinates1 = [IMP.core.XYZ(particle.get_particle()).get_coordinates() for particle in particles1]
-        coordinates2 = [IMP.core.XYZ(particle.get_particle()).get_coordinates() for particle in particles2]
+        coordinates1 = [XYZ(particle.get_particle()).get_coordinates() for particle in particles1]
+        coordinates2 = [XYZ(particle.get_particle()).get_coordinates() for particle in particles2]
         r_size = 3
         
         vacuum_ff1 = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles1]
@@ -426,7 +424,7 @@ class Profile(Object):
             x = coefficient * q * q
             G_q = cube_c1
             if abs(x) > 1.0e-8:
-                G_q *= np.exp(x)
+                G_q *= math.exp(x)
 
             self.intensity_[k] += G_q * G_q * self.partial_profiles_[1][k]
             self.intensity_[k] -= G_q * self.partial_profiles_[2][k]
@@ -501,7 +499,7 @@ class Profile(Object):
         for i in range(number_of_distances + 1):
             unit = []
             for j in range(unit_size):
-                unit.append(IMP.core.XYZ(particles[i * unit_size + j]).get_coordinates())
+                unit.append(XYZ(particles[i * unit_size + j]).get_coordinates())
             units.append(unit)
 
         form_factors = [self.ff_table_.get_form_factor(particle, ff_type) for particle in particles[:unit_size]]
@@ -550,8 +548,8 @@ class Profile(Object):
         r_dist = RadialDistributionFunction()  # fi(0) fj(0)
 
         # Copy coordinates and form factors in advance to avoid n^2 copy operations
-        coordinates1 = IMP.core.XYZ(particles1).get_coordinates()
-        coordinates2 = IMP.core.XYZ(particles2).get_coordinates()
+        coordinates1 = XYZ(particles1).get_coordinates()
+        coordinates2 = XYZ(particles2).get_coordinates()
         form_factors1 = get_form_factors(particles1, self.ff_table_, ff_type)
         form_factors2 = get_form_factors(particles2, self.ff_table_, ff_type)
 
@@ -576,7 +574,7 @@ class Profile(Object):
             for r in range(r_dist.size()):
                 dist = r_dist.get_distance_from_index(r)
                 x = dist * self.q_[k]
-                x = math.sinc(x * math.pi)
+                x = math.sin(x)/x if x != 0 else 1
                 intensity_k += r_dist[r] * x
 
             self.intensity_[k] = intensity_k
@@ -612,11 +610,12 @@ class Profile(Object):
                         for t in range(self.beam_profile_.size()):
                             # x = 2*I(t)*sinc(sqrt(q^2+t^2))
                             x1 = dist * math.sqrt(self.q_[k]**2 + self.beam_profile_.q_[t]**2)
-                            x += 2 * self.beam_profile_.intensity_[t] * np.sinc(x1)
+                            s = math.sin(x1)/x1 if x1 != 0 else 1
+                            x += 2 * self.beam_profile_.intensity_[t] * s
                     else:
                         # x = sin(dq)/dq
                         x = dist * self.q_[k]
-                        x = np.sinc(x)
+                        x = math.sin(x)/x if x != 0 else 1
 
                     # Multiply by the value from distribution
                     intensity_k += r_dist[r] * x
@@ -628,8 +627,8 @@ class Profile(Object):
     def squared_distributions_2_partial_profiles(self, r_dist):
         r_size = len(r_dist)
         self.init(len(self.q_), r_size) # , reset=False)
-        # sf = internal.SincFunction(
-        #     math.sqrt(r_dist[0].get_max_distance()) * self.get_max_q(), 0.0001)
+        # sf = SincFunction(
+        #     math.sqrt(r_dist[0].get_max_distance()) * self.max_q_, 0.0001)
         distances = [0.0] * r_dist[0].size()
         for r in range(r_dist[0].size()):
             if r_dist[0][r] > 0.0:
@@ -645,12 +644,13 @@ class Profile(Object):
                     if use_beam_profile:
                         for t in range(self.beam_profile_.size()):
                             x1 = dist * math.sqrt(self.q_[k]**2 + self.beam_profile_.q_[t]**2)
-                            x += 2 * self.beam_profile_.intensity_[t] * np.sinc(x1)
+                            s = math.sin(x1)/x1 if x1 != 0 else 1
+                            x += 2 * self.beam_profile_.intensity_[t] * s
                     else:
                         x = dist * self.q_[k]
-                        x = np.sinc(x)
+                        x = math.sin(x)/x if x != 0 else 1
                     for i in range(r_size):
-                        self.partial_profiles_[i][k] += r_dist[i][r] * x
+                        self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i][r] * x)
             corr = math.exp(-self.modulation_function_parameter_ * self.q_[k]**2)
             for i in range(r_size):
                 self.partial_profiles_[i][k] *= corr
@@ -808,7 +808,7 @@ class Profile(Object):
 
         print("Start reciprocal profile calculation for", len(particles), "particles")
         self.init()
-        coordinates = IMP.core.XYZ(particles).get_coordinates()
+        coordinates = XYZ(particles).get_coordinates()
 
         # Iterate over pairs of atoms
         for i in range(len(coordinates)):
@@ -832,7 +832,7 @@ class Profile(Object):
 
         print("Start partial reciprocal profile calculation for", len(particles), "particles")
 
-        coordinates = IMP.core.XYZ(particles).get_coordinates()
+        coordinates = XYZ(particles).get_coordinates()
 
         r_size = 3
         if len(surface) == len(particles):
