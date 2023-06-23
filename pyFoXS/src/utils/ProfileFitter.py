@@ -6,7 +6,7 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 
 from .FitParameters import FitParameters
 from .Profile import Profile
-from .ChiScore import ChiScore
+from ..score.ChiScore import ChiScore
 
 class ProfileFitter:
     def __init__(self, exp_profile, scoring_function=ChiScore()):

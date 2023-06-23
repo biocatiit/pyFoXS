@@ -8,7 +8,8 @@ import copy
 import math
 import numpy as np
 from scipy.optimize import curve_fit
-from .FormFactorTable import get_default_form_factor_table, FormFactorType
+
+from ..structure.FormFactorTable import get_default_form_factor_table, FormFactorType
 from .Distribution import RadialDistributionFunction
 
 IMP_SAXS_DELTA_LIMIT = 1.0e-15

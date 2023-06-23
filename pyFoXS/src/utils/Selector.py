@@ -1,3 +1,9 @@
+"""
+A class for PDB selectors
+
+Copyright 2007-2022 IMP Inventors. All rights reserved.
+"""
+
 import string
 from abc import abstractmethod
 

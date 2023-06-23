@@ -1,5 +1,5 @@
 """
-\file Atom.cpp   \brief Simple atoms decorator.
+\file Residue.cpp   \brief Simple residue decorator.
 
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
@@ -130,7 +130,6 @@ def residue_to_string(code):
     }
     return residue_types[code]
 
-
 def get_one_letter_code(residue_type):
     one_letter_codes = {
         ResidueType.UNK: "X",
@@ -240,4 +239,3 @@ class Residue:
     @index.setter
     def index(self, value):
         self._index = int(value)
-

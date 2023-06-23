@@ -9,6 +9,10 @@ import numpy as np
 from scipy import spatial
 
 class SolventAccessibleSurface:
+    def __init__(self):
+        self.radii2type = None
+        self.sphere_dots = None
+
     def compute_accessibility(self, point, probe_radius, density):
         sphere_dots = self.create_sphere_dots(probe_radius, density)
         intersecting_count = 0
@@ -32,7 +36,7 @@ class SolventAccessibleSurface:
         self.create_sphere_dots(ps, density)
 
         # init grid
-        grid = self.init_grid(coordinates)
+        grid = spatial.KDTree(coordinates)
 
         # compute surface
         max_radius = 3.0
@@ -80,21 +84,6 @@ class SolventAccessibleSurface:
             res.append(float(dotNum) / len(spoints))
         return res
 
-    def init_grid(self, coordinates):
-        grid = spatial.KDTree(coordinates)
-        # # Define grid dimensions
-        # size = int(max(max(coord) for coord in coordinates) - min(min(coord) for coord in coordinates) + 10)
-        # grid_size = (size, size, size)  # Size of the grid in each dimension
-        # # Create an empty grid
-        # grid = np.zeros(grid_size)
-
-        # # grid = defaultdict(list)
-        # for i in range(len(coordinates)):
-        #     # grid_index = self.get_nearest_index(grid, coordinates[i])
-        #     grid[coordinates[i]] = i
-        return grid
-
-
     def get_nearest_index(self, grid_coordinates, target_coordinates):
         # Convert the grid coordinates and target coordinates to NumPy arrays
         grid_coordinates = np.array(grid_coordinates)
@@ -107,7 +96,6 @@ class SolventAccessibleSurface:
         nearest_index = np.argmin(distances)
 
         return nearest_index
-
 
     def get_bounding_box(self, coordinates, radius=0.0):
         coordinates = [coordinates]
@@ -165,20 +153,3 @@ class SolventAccessibleSurface:
                 y = xy * math.sin(teta)
                 res.append((radius * x, radius * y, radius * z))
         return res
-
-# def get_nearest_index(self, pt):
-#     if self.get_is_dense():
-#         ei = self.get_nearest_extended_index(pt)
-#         return self.get_index(ei)
-#     else:
-#         raise ValueError("get_nearest_index only works on dense grids.")
-# 
-# def get_nearest_extended_index(self, pt):
-#     if self.get_is_bounded():
-#         ei = self.get_extended_index(pt)
-#         for i in range(pt.get_dimension()):
-#             ei[i] = max(0, ei[i])
-#             ei[i] = min(len(self) - 1, ei[i])
-#         return ei
-#     else:
-#         raise ValueError("get_nearest_index only works on bounded grids.")

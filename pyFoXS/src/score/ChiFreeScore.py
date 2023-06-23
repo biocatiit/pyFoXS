@@ -4,9 +4,10 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
-import numpy as np
 import random
-from .Profile import Profile
+import numpy as np
+
+from ..utils.Profile import Profile
 
 class ChiFreeScore:
     def __init__(self, K, ns):

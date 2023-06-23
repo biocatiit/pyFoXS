@@ -7,12 +7,11 @@ import os
 import numpy as np
 from scipy.spatial import distance
 
-from .SolventAccessibleSurface import SolventAccessibleSurface
 from .Profile import Profile
-from .Particle import Particle
-from .Residue import Residue
-from .Atom import Atom, get_atom_type_exists, add_atom_type
 from .Selector import NonAlternativePDBSelector, NonWaterNonHydrogenPDBSelector, NonHydrogenPDBSelector, NonWaterPDBSelector, CAlphaPDBSelector, get_default_pdb_selector
+from ..structure.SolventAccessibleSurface import SolventAccessibleSurface
+from ..structure.Residue import Residue
+from ..structure.Atom import Atom, get_atom_type_exists, add_atom_type
 
 def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file):
     profile = Profile(qmin=min_q, qmax=max_q, delta=delta_q, constructor=0)
@@ -103,10 +102,10 @@ def get_by_type(root_particle, particle_type):
         if isinstance(particle, particle_type):
             particles.append(particle)
 
-        if isinstance(particle, Particle):
-            for child in particle.children:
-                if child not in visited:
-                    depth_first_search(child)
+        # if isinstance(particle, Particle):
+        #     for child in particle.children:
+        #         if child not in visited:
+        #             depth_first_search(child)
 
     depth_first_search(root_particle)
     return particles
@@ -565,10 +564,10 @@ def read_pdb_func(in_stream, name, filename, model, selector, select_first_model
             if atom:
                 # check if new chain
                 if root_particle is None:
-                    root_particle = Particle(model)
+                    root_particle = [] # Particle(model)
                     
-                    if root_name != "" or name != "":
-                        root_particle.name = name + ": " + root_name
+                    # if root_name != "" or name != "":
+                    #     root_particle.name = name + ": " + root_name
 
                 if current_chain is None or chain != curr_chain:
                     curr_chain = chain
@@ -576,7 +575,7 @@ def read_pdb_func(in_stream, name, filename, model, selector, select_first_model
                     # current_molecule.chains.append(current_chain)
                     # create new chain particle
                     chain_name_set = False
-                    root_particle.add_child(current_chain)
+                    root_particle.append(current_chain)
                     current_residue = None  # make sure we get a new residue
 
                 # check if new residue

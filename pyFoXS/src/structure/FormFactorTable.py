@@ -7,6 +7,7 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 
 import enum
 import math
+
 from .Residue import ResidueType, residue_to_string
 
 class FormFactorType(enum.Enum):
@@ -118,7 +119,7 @@ class FormFactorTable:
         #  CH        CH2        CH3     NH       NH2       NH3     OH       OH2
         # SH
     ]
-    
+
     vacuum_zero_form_factors_ = [
         #   H       He - periodic table line 1
         0.999953, 0.999872,
@@ -136,7 +137,7 @@ class FormFactorTable:
         6.99915, 7.99911, 8.99906, 7.99455, 8.99451, 9.99446, 8.99935, 9.9993,
         16.9998
     ]
-    
+
     dummy_zero_form_factors_ = [
         1.7201, 1.7201, 1.399, 1.399, 1.399, 5.49096, 0.83166, 3.04942,
         1.399, 3.006,
@@ -153,7 +154,7 @@ class FormFactorTable:
         8.35334
         #  CH       CH2      CH3     NH       NH2       NH3     OH       OH2   SH
     ]
-    
+
     # form_factor_type_key_ = IntKey()
 
     form_factors_coefficients_ = []
@@ -172,7 +173,7 @@ class FormFactorTable:
             self.c_ = c
             self.b_ = b
             self.excl_vol_ = excl_vol
-            
+
         def __str__(self):
             return (
                 f"Atom Type: {self.atom_type_}\n"
@@ -260,7 +261,7 @@ class FormFactorTable:
             residue_type = p.residue.residue_type if p.residue else None
             if residue_type:
                 return self.get_form_factor_r(residue_type)
-        
+
         if self.form_factor_type_key_ in p.cache_attributes:
             return self.dummy_zero_form_factors_[p.cache_attributes[self.form_factor_type_key_].value]
 

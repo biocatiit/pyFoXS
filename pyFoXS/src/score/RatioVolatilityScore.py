@@ -4,8 +4,9 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
-from .ChiScore import ChiScore
 import numpy as np
+
+from .ChiScore import ChiScore
 
 class RatioVolatilityScore:
     def __init__(self, dmax):

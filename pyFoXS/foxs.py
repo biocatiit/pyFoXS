@@ -7,18 +7,21 @@ import sys
 import argparse
 import numpy as np
 
-from src.internal import __version__
-from src.internal.utils import *
-from src.internal.Profile import Profile
-from src.internal.ProfileFitter import ProfileFitter
-from src.internal.ChiScoreLog import ChiScoreLog
-from src.internal.ChiFreeScore import ChiFreeScore
-from src.internal.RatioVolatilityScore import RatioVolatilityScore
-from src.internal.FitParameters import FitParameters
-from src.internal.Distribution import RadialDistributionFunction
-from src.internal.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
+from src import __version__
+from src.utils.utils import *
+from src.utils.Profile import Profile
+from src.utils.ProfileFitter import ProfileFitter
+from src.score.ChiScoreLog import ChiScoreLog
+from src.score.ChiFreeScore import ChiFreeScore
+from src.score.RatioVolatilityScore import RatioVolatilityScore
+from src.utils.FitParameters import FitParameters
+from src.utils.Distribution import RadialDistributionFunction
+from src.structure.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
 
 def main():
+    """
+    Main function to run pyFoXS in the terminal
+    """
     profile_size = 500
     max_q = 0.0 # change after read
     min_c1 = 0.99
@@ -79,7 +82,7 @@ def main():
 
     if args.version:
         print(f"pyFoXS Version: {__version__}")
-        return 0
+        return
 
     print("Usage: <pdb_file1> <pdb_file2> ... <profile_file1> <profile_file2> ...\n"
       "\nAny number of input PDBs and profiles is supported.\n"
@@ -96,7 +99,7 @@ def main():
 
     if not files:
         print("WARNING: You need to specify a file to the program.\n")
-        return 0
+        return
 
     if args.hydrogens:
         heavy_atoms_only = False
@@ -112,9 +115,6 @@ def main():
 
     if args.score_log:
         score_log = True
-
-    # if args.gnuplot_script:
-    #     gnuplot_script = True
 
     if args.explicit_water:
         explicit_water = True
@@ -147,8 +147,6 @@ def main():
         print("Default value of 1 is used")
         units = 1
 
-    # IMP::benchmark::Profiler pp("prof_out");
-
     # determine form factor type
     ff_type = FormFactorType.HEAVY_ATOMS
 
@@ -168,7 +166,7 @@ def main():
             max_q, units)
 
     max_q = 0.5
-    
+
     if background_adjustment_q > 0.0:
         for profile in exp_profiles:
             profile.background_adjust(background_adjustment_q)
@@ -181,8 +179,6 @@ def main():
             for profile in exp_profiles:
                 if profile.max_q_ > max_q:
                     max_q = profile.max_q_
-                # if profile.get_max_q() > max_q:
-                #     max_q = profile.get_max_q()
         else:
             max_q = 0.5
 
@@ -218,8 +214,6 @@ def main():
         else:  # write normal profile
             profile.add_errors()
             profile.write_SAXS_file(profile_file_name)
-            # if gnuplot_script:
-            #     Gnuplot.print_profile_script(pdb_files[i])
 
         # calculate P(r)
         if pr_dmax > 0.0:
@@ -265,23 +259,10 @@ def main():
             fp.set_profile_file_name(dat_file)
             fp.set_mol_index(i)
             fp.show(sys.stdout)
-            # if gnuplot_script:
-            #     Gnuplot.print_fit_script(fp)
             fps.append(fp)
 
     fps.sort(key=lambda x: x.get_score())
-
-    # if len(pdb_files) > 1 and gnuplot_script:
-    #     Gnuplot.print_profile_script(pdb_files)
-    #     if len(dat_files) > 0:
-    #         Gnuplot.print_fit_script(fps)
-    # if javascript:
-    #     if len(dat_files) > 0:
-    #         Gnuplot.print_canvas_script_fps(fps, JmolWriter.MAX_DISPLAY_NUM_)
-    #         JmolWriter.prepare_jmol_script(fps, particles_vec, "jmoltable")
-    #     else:
-    #         Gnuplot.print_canvas_script_pdb(pdb_files, JmolWriter.MAX_DISPLAY_NUM_)
-    #         JmolWriter.prepare_jmol_script(pdb_files, particles_vec, "jmoltable")
+    return
 
 if __name__ == "__main__":
     main()
