@@ -5,15 +5,20 @@ see FOXS for webserver (salilab.org/foxs)
 
 import sys
 import argparse
-from IMP.saxs import FitParameters, HEAVY_ATOMS, CA_ATOMS, ALL_ATOMS, get_default_form_factor_table
-from src.internal.Gnuplot import *
-from src.internal.JmolWriter import *
+import numpy as np
+
+from src.internal import __version__
 from src.internal.utils import *
 from src.internal.Profile import Profile
 from src.internal.ProfileFitter import ProfileFitter
+from src.internal.ChiScoreLog import ChiScoreLog
+from src.internal.ChiFreeScore import ChiFreeScore
+from src.internal.RatioVolatilityScore import RatioVolatilityScore
+from src.internal.FitParameters import FitParameters
+from src.internal.Distribution import RadialDistributionFunction
+from src.internal.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
 
 def main():
-    __version__ = "0.1"
     profile_size = 500
     max_q = 0.0 # change after read
     min_c1 = 0.99
@@ -29,14 +34,14 @@ def main():
     units = 1 # determine automatically
     vr_score = False
     score_log = False
-    gnuplot_script = False
+    # gnuplot_script = False
     explicit_water = False
     desc_prefix = ""
     form_factor_table_file = ""
     beam_profile_file = ""
     ab_initio = False
     vacuum = False
-    javascript = False
+    # javascript = False
     chi_free = 0
     pr_dmax = 0.0
 
@@ -47,7 +52,7 @@ def main():
     hidden.add_argument("--beam_profile", help="beam profile file name for desmearing", default=beam_profile_file)
     hidden.add_argument("--ab_initio", help="compute profile for a bead model with constant form factor (default = False)", action="store_true")
     hidden.add_argument("--vacuum", help="compute profile in vacuum (default = False)", action="store_true")
-    hidden.add_argument("--javascript", help="output JavaScript for browser viewing of the results (default = False)", action="store_true")
+    # hidden.add_argument("--javascript", help="output JavaScript for browser viewing of the results (default = False)", action="store_true")
     hidden.add_argument("--chi_free", help="compute chi-free instead of chi, specify iteration number (default = 0)", type=int, default=chi_free)
     hidden.add_argument("--pr_dmax", help="Dmax value for P(r) calculation. P(r) is calculated only if pr_dmax > 0", type=float, default=pr_dmax)
 
@@ -68,12 +73,11 @@ def main():
     parser.add_argument("--units", "-u", help="1 - unknown --> determine automatically (default) 2 - q values are in 1/A, 3 - q values are in 1/nm", type=int, default=units)
     parser.add_argument("--volatility_ratio", "-v", help="calculate volatility ratio score (default = False)", action="store_true")
     parser.add_argument("--score_log", "-l", help="use log(intensity) in fitting and scoring (default = False)", action="store_true")
-    parser.add_argument("--gnuplot_script", "-g", help="print gnuplot script for gnuplot viewing (default = False)", action="store_true")
+    # parser.add_argument("--gnuplot_script", "-g", help="print gnuplot script for gnuplot viewing (default = False)", action="store_true")
 
     args = parser.parse_args()
 
     if args.version:
-        print(f"IMP Version: {IMP.__version__}")
         print(f"pyFoXS Version: {__version__}")
         return 0
 
@@ -109,8 +113,8 @@ def main():
     if args.score_log:
         score_log = True
 
-    if args.gnuplot_script:
-        gnuplot_script = True
+    # if args.gnuplot_script:
+    #     gnuplot_script = True
 
     if args.explicit_water:
         explicit_water = True
@@ -123,8 +127,8 @@ def main():
     if args.vacuum:
         vacuum = True
 
-    if args.javascript:
-        javascript = True
+    # if args.javascript:
+    #     javascript = True
 
     if args.volatility_ratio:
         vr_score = True
@@ -146,23 +150,23 @@ def main():
     # IMP::benchmark::Profiler pp("prof_out");
 
     # determine form factor type
-    ff_type = HEAVY_ATOMS
+    ff_type = FormFactorType.HEAVY_ATOMS
 
     if not heavy_atoms_only:
-        ff_type = ALL_ATOMS
+        ff_type = FormFactorType.ALL_ATOMS
 
     if residue_level:
-        ff_type = CA_ATOMS
+        ff_type = FormFactorType.CA_ATOMS
 
     # 1. read pdbs and profiles, prepare particles
     particles_vec = []
     exp_profiles = []
-    m = IMP.Model()
+    m = None # Model()
 
     read_files(m, files, pdb_files, dat_files, particles_vec, exp_profiles,
             residue_level, heavy_atoms_only, multi_model_pdb, explicit_water,
             max_q, units)
-    
+
     max_q = 0.5
     
     if background_adjustment_q > 0.0:
@@ -214,8 +218,8 @@ def main():
         else:  # write normal profile
             profile.add_errors()
             profile.write_SAXS_file(profile_file_name)
-            if gnuplot_script:
-                Gnuplot.print_profile_script(pdb_files[i])
+            # if gnuplot_script:
+            #     Gnuplot.print_profile_script(pdb_files[i])
 
         # calculate P(r)
         if pr_dmax > 0.0:
@@ -224,7 +228,8 @@ def main():
             pr.normalize()
             pr_file_name = pdb_files[i] + ".pr"
             with open(pr_file_name, "w") as pr_file:
-                pr.show(pr_file)
+                pr_file.write("Distance distribution")
+                pr_file.write(pr.distribution)
 
         # 3. fit experimental profiles
         for j, dat_file in enumerate(dat_files):
@@ -233,24 +238,23 @@ def main():
                 trim_extension(os.path.basename(dat_file)) + ".dat"
             fp = FitParameters()
             if score_log:
-                pf = ProfileFitterChiLog(exp_saxs_profile)
+                pf = ProfileFitter(exp_saxs_profile, scoring_function=ChiScoreLog())
                 fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                     use_offset, fit_file_name2)
             else:
                 if vr_score:
-                    pf = ProfileFitterRatioVolatility(exp_saxs_profile)
+                    pf = ProfileFitter(exp_saxs_profile, scoring_function=RatioVolatilityScore())
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                 else:
-                    pf = ProfileFitter(exp_saxs_profile)
+                    pf = ProfileFitter(exp_saxs_profile) # scoring_function=ChiScore() by default
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                     if chi_free > 0:
                         dmax = compute_max_distance(particles_vec[i])
-                        ns = int(round(exp_saxs_profile.max_q_ * dmax / math.pi))
+                        ns = int(round(exp_saxs_profile.max_q_ * dmax / np.pi))
                         K = chi_free
                         cfs = ChiFreeScore(ns, K)
-                        cfs.set_was_used(True)
                         resampled_profile = Profile(qmin=exp_saxs_profile.min_q_, qmax=exp_saxs_profile.max_q_,
                                                     delta=exp_saxs_profile.delta_q_, constructor=0)
 
@@ -261,26 +265,23 @@ def main():
             fp.set_profile_file_name(dat_file)
             fp.set_mol_index(i)
             fp.show(sys.stdout)
-            if gnuplot_script:
-                Gnuplot.print_fit_script(fp)
+            # if gnuplot_script:
+            #     Gnuplot.print_fit_script(fp)
             fps.append(fp)
 
     fps.sort(key=lambda x: x.get_score())
 
-    if len(pdb_files) > 1 and gnuplot_script:
-        Gnuplot.print_profile_script(pdb_files)
-        if len(dat_files) > 0:
-            Gnuplot.print_fit_script(fps)
-
-    if javascript:
-        if len(dat_files) > 0:
-            Gnuplot.print_canvas_script(fps, JmolWriter.MAX_DISPLAY_NUM_)
-            JmolWriter.prepare_jmol_script(fps, particles_vec, "jmoltable")
-        else:
-            Gnuplot.print_canvas_script(pdb_files, JmolWriter.MAX_DISPLAY_NUM_)
-            JmolWriter.prepare_jmol_script(pdb_files, particles_vec, "jmoltable")
-
-    return 0
+    # if len(pdb_files) > 1 and gnuplot_script:
+    #     Gnuplot.print_profile_script(pdb_files)
+    #     if len(dat_files) > 0:
+    #         Gnuplot.print_fit_script(fps)
+    # if javascript:
+    #     if len(dat_files) > 0:
+    #         Gnuplot.print_canvas_script_fps(fps, JmolWriter.MAX_DISPLAY_NUM_)
+    #         JmolWriter.prepare_jmol_script(fps, particles_vec, "jmoltable")
+    #     else:
+    #         Gnuplot.print_canvas_script_pdb(pdb_files, JmolWriter.MAX_DISPLAY_NUM_)
+    #         JmolWriter.prepare_jmol_script(pdb_files, particles_vec, "jmoltable")
 
 if __name__ == "__main__":
     main()

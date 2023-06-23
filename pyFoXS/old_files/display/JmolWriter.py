@@ -52,7 +52,7 @@ class JmolWriter:
                             "<th><center>R<sub>g</sub></th>" +
                             "<th><center> # atoms </th> <th> fit file </th><th> png file </th></tr>\n")
             for i in range(len(fps)):
-                hex_color = ColorCoder.html_hex_color(i)
+                hex_color = i # ColorCoder.html_hex_color(i)
                 pdb_name = saxs.trim_extension(fps[i].get_pdb_file_name())
                 profile_name = saxs.trim_extension(
                     basename(fps[i].get_profile_file_name().c_str()))
@@ -127,7 +127,7 @@ class JmolWriter:
                             "<th><center> R<sub>g</sub> </th>" +
                             "<th><center> # atoms </th> <th> Profile file</th></tr>\n")
             for i in range(len(pdbs)):
-                hex_color = ColorCoder.html_hex_color(hex_color, i)
+                hex_color = i #  ColorCoder.html_hex_color(hex_color, i)
                 pdb_name = saxs.trim_extension(pdbs[i])
                 profile_name = pdbs[i] + ".dat"
                 rg = IMP.saxs.radius_of_gyration(particles_vec[i])
@@ -156,7 +156,7 @@ class JmolWriter:
     def prepare_coloring_string(model_num):
         coloring_string = ""
         for i in range(model_num):
-            dec_color = ColorCoder.jmol_dec_color(i)
+            dec_color = i #  ColorCoder.jmol_dec_color(i)
             coloring_string += "select model = " + str(i + 1) + "; color " + dec_color + ";"
         return coloring_string
 

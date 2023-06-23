@@ -4,13 +4,9 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
-from IMP import Object
 import numpy as np
 
-class ChiScore(Object):
-    def __init__(self):
-        super().__init__("ChiScore%1%")
-
+class ChiScore:
     def compute_score(self, exp_profile, model_profile, use_offset):
         offset = 0.0
         if use_offset:

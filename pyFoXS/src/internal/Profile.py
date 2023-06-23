@@ -8,17 +8,15 @@ import copy
 import math
 import numpy as np
 from scipy.optimize import curve_fit
-from IMP.saxs import get_default_form_factor_table, RadialDistributionFunction, HEAVY_ATOMS, CA_ATOMS
-from IMP.core import XYZ
-from IMP import Object
+from .FormFactorTable import get_default_form_factor_table, FormFactorType
+from .Distribution import RadialDistributionFunction
 
 IMP_SAXS_DELTA_LIMIT = 1.0e-15
 
-class Profile(Object):
+class Profile:
     modulation_function_parameter_ = 0.23
 
     def __init__(self, qmin=0, qmax=0, delta=0, file_name="", fit_file=True, max_q=0, units=0, constructor=0):
-        super().__init__("Profile%1%")
         if constructor == 0:
             self.min_q_ = qmin
             self.max_q_ = qmax
@@ -269,7 +267,7 @@ class Profile(Object):
     def calculate_profile_real(self, particles, ff_type):
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()  # fi(0) fj(0)
-        coordinates = [XYZ(particle.get_particle()).get_coordinates() for particle in particles]
+        coordinates = [particle.coordinates for particle in particles]
         form_factors = [self.ff_table_.get_form_factor(particle, ff_type) for particle in particles]
 
         # iterate over pairs of atoms
@@ -293,7 +291,7 @@ class Profile(Object):
     def calculate_profile_constant_form_factor(self, particles, form_factor):
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()
-        coordinates = [XYZ(particle.get_particle()).get_coordinates() for particle in particles]
+        coordinates = [particle.coordinates for particle in particles]
         ff = math.pow(form_factor, 2)
 
         # iterate over pairs of atoms
@@ -309,7 +307,7 @@ class Profile(Object):
 
     def calculate_profile_partial(self, particles, surface, ff_type):
         print("start real partial profile calculation for {} particles\n".format(len(particles)))
-        coordinates = [XYZ(particle.get_particle()).get_coordinates() for particle in particles]
+        coordinates = [particle.coordinates for particle in particles]
         vacuum_ff = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles]
         dummy_ff = [self.ff_table_.get_dummy_form_factor(particle, ff_type) for particle in particles]
         water_ff = None
@@ -356,8 +354,8 @@ class Profile(Object):
     def calculate_profile_partial(self, particles1, particles2, surface1, surface2, ff_type):
         print("start real partial profile calculation for {} particles + {}\n".format(len(particles1), len(particles2)))
         
-        coordinates1 = [XYZ(particle.get_particle()).get_coordinates() for particle in particles1]
-        coordinates2 = [XYZ(particle.get_particle()).get_coordinates() for particle in particles2]
+        coordinates1 = [particle.coordinates for particle in particles1]
+        coordinates2 = [particle.coordinates for particle in particles2]
         r_size = 3
         
         vacuum_ff1 = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles1]
@@ -499,7 +497,7 @@ class Profile(Object):
         for i in range(number_of_distances + 1):
             unit = []
             for j in range(unit_size):
-                unit.append(XYZ(particles[i * unit_size + j]).get_coordinates())
+                unit.append(particles[i * unit_size + j].coordinates)
             units.append(unit)
 
         form_factors = [self.ff_table_.get_form_factor(particle, ff_type) for particle in particles[:unit_size]]
@@ -548,8 +546,8 @@ class Profile(Object):
         r_dist = RadialDistributionFunction()  # fi(0) fj(0)
 
         # Copy coordinates and form factors in advance to avoid n^2 copy operations
-        coordinates1 = XYZ(particles1).get_coordinates()
-        coordinates2 = XYZ(particles2).get_coordinates()
+        coordinates1 = particles1.coordinates
+        coordinates2 = particles2.coordinates
         form_factors1 = get_form_factors(particles1, self.ff_table_, ff_type)
         form_factors2 = get_form_factors(particles2, self.ff_table_, ff_type)
 
@@ -631,14 +629,14 @@ class Profile(Object):
         #     math.sqrt(r_dist[0].get_max_distance()) * self.max_q_, 0.0001)
         distances = [0.0] * r_dist[0].size()
         for r in range(r_dist[0].size()):
-            if r_dist[0][r] > 0.0:
+            if r_dist[0].distribution[r] > 0.0:
                 distances[r] = math.sqrt(r_dist[0].get_distance_from_index(r))
         use_beam_profile = False
         if self.beam_profile_ is not None and self.beam_profile_.size() > 0:
             use_beam_profile = True
         for k in range(len(self.q_)):
             for r in range(r_dist[0].size()):
-                if r_dist[0][r] > 0.0:
+                if r_dist[0].distribution[r] > 0.0:
                     dist = distances[r]
                     x = 0.0
                     if use_beam_profile:
@@ -650,7 +648,7 @@ class Profile(Object):
                         x = dist * self.q_[k]
                         x = math.sin(x)/x if x != 0 else 1
                     for i in range(r_size):
-                        self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i][r] * x)
+                        self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i].distribution[r] * x)
             corr = math.exp(-self.modulation_function_parameter_ * self.q_[k]**2)
             for i in range(r_size):
                 self.partial_profiles_[i][k] *= corr
@@ -802,13 +800,13 @@ class Profile(Object):
             rd.add_to_distribution(r, r * scale * s)
 
     def calculate_profile_reciprocal(self, particles, ff_type):
-        if ff_type == CA_ATOMS:
+        if ff_type == FormFactorType.CA_ATOMS:
             print("Reciprocal space profile calculation is not supported for residue level")
             return
 
         print("Start reciprocal profile calculation for", len(particles), "particles")
         self.init()
-        coordinates = XYZ(particles).get_coordinates()
+        coordinates = particles.coordinates
 
         # Iterate over pairs of atoms
         for i in range(len(coordinates)):
@@ -826,13 +824,13 @@ class Profile(Object):
                 self.intensity_[k] += factors1[k] * factors1[k]
 
     def calculate_profile_reciprocal_partial(self, particles, surface, ff_type):
-        if ff_type == CA_ATOMS:
+        if ff_type == FormFactorType.CA_ATOMS:
             print("Reciprocal space profile calculation is not supported for residue level")
             return
 
         print("Start partial reciprocal profile calculation for", len(particles), "particles")
 
-        coordinates = XYZ(particles).get_coordinates()
+        coordinates = particles.coordinates
 
         r_size = 3
         if len(surface) == len(particles):
@@ -875,7 +873,7 @@ class Profile(Object):
 
         self.sum_partial_profiles(1.0, 0.0, False)
 
-    def calculate_profile(self, particles, ff_type=HEAVY_ATOMS, reciprocal=False):
+    def calculate_profile(self, particles, ff_type=FormFactorType.HEAVY_ATOMS, reciprocal=False):
         if not reciprocal:
             self.calculate_profile_real(particles, ff_type)
         else:

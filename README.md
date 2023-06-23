@@ -3,11 +3,11 @@ Python version of the FoXS software
 
 \brief Determine small angle X-ray (SAXS) profiles.
 
-## Installation
+## Install and run
 
-First, you need to install the IMP library:
+First, you need to install the scipy and numpy library:
 ```
-conda install -c conda-forge imp
+pip install scipy numpy
 ```
 
 You can then run the foxs.py file like a normal python file:

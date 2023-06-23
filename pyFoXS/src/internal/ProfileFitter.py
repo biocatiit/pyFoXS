@@ -4,15 +4,12 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
-from IMP.saxs import FitParameters
-from IMP import Object
-
+from .FitParameters import FitParameters
 from .Profile import Profile
 from .ChiScore import ChiScore
 
-class ProfileFitter(Object):
+class ProfileFitter:
     def __init__(self, exp_profile, scoring_function=ChiScore()):
-        super().__init__("ProfileFitter%1%")
         self.exp_profile_ = exp_profile
         self.scoring_function_ = scoring_function
 
