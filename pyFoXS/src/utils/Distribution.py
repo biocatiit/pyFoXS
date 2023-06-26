@@ -41,7 +41,7 @@ class RadialDistributionFunction:
 
     def get_distance_from_index(self, index):
         return (index + 0.5) * self.bin_size
-    
+
     def get_index_from_distance(self, dist):
         return round(dist * 1/self.bin_size)
 

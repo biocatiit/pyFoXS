@@ -31,7 +31,7 @@ class WaterPDBSelector(NonAlternativePDBSelector):
         if not NonAlternativePDBSelector.get_is_selected(self, pdb_line):
             return False
         res_name = pdb_line[17:20].strip()
-        return (res_name[:3] == 'HOH' or res_name[:3] == 'DOD')
+        return res_name[:3] == 'HOH' or res_name[:3] == 'DOD'
 
 class HydrogenPDBSelector(NonAlternativePDBSelector):
     def __init__(self, name="HydrogenPDBSelector%1%"):

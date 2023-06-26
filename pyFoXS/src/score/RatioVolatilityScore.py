@@ -9,7 +9,7 @@ import numpy as np
 from .ChiScore import ChiScore
 
 class RatioVolatilityScore:
-    def __init__(self, dmax):
+    def __init__(self, dmax=1):
         self.dmax_ = dmax
 
     def compute_score(self, exp_profile, model_profile, use_offset):

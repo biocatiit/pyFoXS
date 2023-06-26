@@ -73,7 +73,7 @@ class Profile:
             if not split_results[0].replace('.', '', 1).replace('-', '', 1).replace('+', '', 1).replace('E', '', 1).replace('e', '', 1).isdigit():
                 continue
             max_q = float(split_results[0])
-        
+
         return max_q
 
     def read_SAXS_file(self, file_name, fit_file, max_q, units):
@@ -135,8 +135,8 @@ class Profile:
 
         if len(qs) > 0:
             self.init(len(qs))
-        for i in range(len(qs)):
-            self.q_[i] = qs[i]
+        for i, e in enumerate(qs):
+            self.q_[i] = e
             self.intensity_[i] = intensities[i]
             self.error_[i] = errors[i]
 
@@ -199,7 +199,7 @@ class Profile:
             out_file.write("\n")
 
             for i in range(1, self.size()):
-                if max_q > 0 and self.q_[i] > max_q:
+                if self.q_[i] > max_q > 0:
                     break
                 out_file.write("{:.8f} {:.8f}".format(self.q_[i], self.intensity_[i]))
                 if self.experimental_:
@@ -225,8 +225,8 @@ class Profile:
 
         if qs:
             self.init(len(qs), psize)
-            for i in range(len(qs)):
-                self.q_[i] = qs[i]
+            for i, e in enumerate(qs):
+                self.q_[i] = e
                 self.intensity_[i] = 1
                 self.error_[i] = 1
                 for j in range(psize):
@@ -256,12 +256,12 @@ class Profile:
             out_file.write("# q_min = {}, q_max = {}, delta_q = {}\n".format(self.min_q_, self.max_q_, self.delta_q_))
             out_file.write("#    q    intensity\n")
 
-            out_file.write('\n'.join(["{:.5f} {:.8f}".format(self.q_(i), self.intensity_(i)) for i in range(self.size())]))
+            out_file.write('\n'.join(["{:.5f} {:.8f}".format(self.q_[i], self.intensity_[i]) for i in range(self.size())]))
 
             if len(self.partial_profiles_) > 0:
                 for j in range(len(self.partial_profiles_)):
                     out_file.write('\n')
-                    out_file.write(' '.join(["{:.8f}".format(self.partial_profiles_[j](i)) for i in range(self.size())]))
+                    out_file.write(' '.join(["{:.8f}".format(self.partial_profiles_[j][i]) for i in range(self.size())]))
 
         out_file.close()
 
@@ -315,11 +315,11 @@ class Profile:
 
         if len(surface) == len(particles):
             water_ff = [surface[i] * self.ff_table_.get_water_form_factor() for i in range(len(particles))]
-  
+
         r_size = 3
         if len(surface) == len(particles):
             r_size = 6
-        
+
         r_dist = [RadialDistributionFunction() for _ in range(r_size)]
 
         # iterate over pairs of atoms
@@ -329,17 +329,17 @@ class Profile:
                 r_dist[0].add_to_distribution(dist, 2 * vacuum_ff[i] * vacuum_ff[j])  # constant
                 r_dist[1].add_to_distribution(dist, 2 * dummy_ff[i] * dummy_ff[j])  # c1^2
                 r_dist[2].add_to_distribution(dist, 2 * (vacuum_ff[i] * dummy_ff[j] + vacuum_ff[j] * dummy_ff[i]))  # -c1
-                
+
                 if r_size > 3:
                     r_dist[3].add_to_distribution(dist, 2 * water_ff[i] * water_ff[j])  # c2^2
                     r_dist[4].add_to_distribution(dist, 2 * (vacuum_ff[i] * water_ff[j] + vacuum_ff[j] * water_ff[i]))  # c2
                     r_dist[5].add_to_distribution(dist, 2 * (water_ff[i] * dummy_ff[j] + water_ff[j] * dummy_ff[i]))  # -c1*c2
-        
+
             # add autocorrelation part
             r_dist[0].add_to_distribution(0.0, vacuum_ff[i] * vacuum_ff[i])
             r_dist[1].add_to_distribution(0.0, dummy_ff[i] * dummy_ff[i])
             r_dist[2].add_to_distribution(0.0, 2 * vacuum_ff[i] * dummy_ff[i])
-            
+
             if r_size > 3:
                 r_dist[3].add_to_distribution(0.0, water_ff[i] * water_ff[i])
                 r_dist[4].add_to_distribution(0.0, 2 * vacuum_ff[i] * water_ff[i])
@@ -351,73 +351,28 @@ class Profile:
         # compute default profile c1 = 1, c2 = 0
         self.sum_partial_profiles(1.0, 0.0, False)
 
-    """
-    def calculate_profile_partial(self, particles1, particles2, surface1, surface2, ff_type):
-        print("start real partial profile calculation for {} particles + {}\n".format(len(particles1), len(particles2)))
-        
-        coordinates1 = [particle.coordinates for particle in particles1]
-        coordinates2 = [particle.coordinates for particle in particles2]
-        r_size = 3
-        
-        vacuum_ff1 = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles1]
-        dummy_ff1 = [self.ff_table_.get_dummy_form_factor(particle, ff_type) for particle in particles1]
-        
-        vacuum_ff2 = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles2]
-        dummy_ff2 = [self.ff_table_.get_dummy_form_factor(particle, ff_type) for particle in particles2]
-        
-        water_ff1 = None
-        water_ff2 = None
-        
-        if surface1 and surface2 and len(surface1) == len(particles1) and len(surface2) == len(particles2):
-            ff_water = self.ff_table_.get_water_form_factor()
-            water_ff1 = [surface1[i] * ff_water for i in range(len(particles1))]
-            water_ff2 = [surface2[i] * ff_water for i in range(len(particles2))]
-            r_size = 6
-        
-        r_dist = [RadialDistributionFunction() for _ in range(r_size)]
-        
-        # iterate over pairs of atoms
-        for i in range(len(coordinates1)):
-            for j in range(len(coordinates2)):
-                dist = get_squared_distance(coordinates1[i], coordinates2[j])
-                r_dist[0].add_to_distribution(dist, 2 * vacuum_ff1[i] * vacuum_ff2[j])  # constant
-                r_dist[1].add_to_distribution(dist, 2 * dummy_ff1[i] * dummy_ff2[j])  # c1^2
-                r_dist[2].add_to_distribution(dist, 2 * (vacuum_ff1[i] * dummy_ff2[j] + vacuum_ff2[j] * dummy_ff1[i]))  # -c1
-                
-                if r_size > 3:
-                    r_dist[3].add_to_distribution(dist, 2 * water_ff1[i] * water_ff2[j])  # c2^2
-                    r_dist[4].add_to_distribution(dist, 2 * (vacuum_ff1[i] * water_ff2[j] + vacuum_ff2[j] * water_ff1[i]))  # c2
-                    r_dist[5].add_to_distribution(dist, 2 * (water_ff1[i] * dummy_ff2[j] + water_ff2[j] * dummy_ff1[i]))  # -c1*c2
-        
-        # convert to reciprocal space
-        self.squared_distributions_2_partial_profiles(r_dist)
-        
-        # compute default profile c1 = 1, c2 = 0
-        self.sum_partial_profiles(1.0, 0.0, False)
-    """
-
     def sum_partial_profiles(self, c1, c2, check_cached=False):
         # precomputed exp function
         # ef = internal.ExpFunction(square(self.get_max_q()) * 0.3, 0.00001)
 
         if len(self.partial_profiles_) == 0:
             return
-        
+
         # check if the profiles are already summed by this c1/c2 combination
         if check_cached and abs(self.c1_ - c1) <= 0.000001 and abs(self.c2_ - c2) <= 0.000001:
             return
-        
+
         rm = self.average_radius_
         coefficient = -rm * rm * (c1 * c1 - 1.0) / (4 * math.pi)
         square_c2 = c2 * c2
         cube_c1 = c1 * c1 * c1
-        
+
         self.intensity_ = copy.deepcopy(self.partial_profiles_[0])
-        
+
         if len(self.partial_profiles_) > 3:
             self.intensity_ += square_c2 * self.partial_profiles_[3]
             self.intensity_ += c2 * self.partial_profiles_[4]
-        
+
         for k in range(self.size()):
             q = self.q_[k]
             x = coefficient * q * q
@@ -427,7 +382,7 @@ class Profile:
 
             self.intensity_[k] += G_q * G_q * self.partial_profiles_[1][k]
             self.intensity_[k] -= G_q * self.partial_profiles_[2][k]
-            
+
             if len(self.partial_profiles_) > 3:
                 self.intensity_[k] -= G_q * c2 * self.partial_profiles_[5][k]
 
@@ -457,19 +412,18 @@ class Profile:
             delta_q = 1.0
             if i == 0 or (delta_q := self.q_[i] - self.q_[i - 1]) <= 1.0e-16:
                 if self.partial_profiles_:
-                    for r in range(len(self.partial_profiles_)):
-                        resampled_profile.partial_profiles_[r][k] = self.partial_profiles_[r][i]
+                    for r, pp in enumerate(self.partial_profiles_):
+                        resampled_profile.partial_profiles_[r][k] = pp[i]
                 resampled_profile.q_[k] = q
                 resampled_profile.intensity_[k] = self.intensity_[i]
             else:
                 # Interpolate
                 alpha = (q - self.q_[i - 1]) / delta_q
-                if alpha > 1.0:
-                    alpha = 1.0  # Handle rounding errors
+                alpha = min(alpha, 1.0) # Handle rounding errors
 
                 if self.partial_profiles_ and len(self.partial_profiles_) > 0:
-                    for r in range(len(self.partial_profiles_)):
-                        intensity = (1 - alpha) * self.partial_profiles_[r][i - 1] + alpha * self.partial_profiles_[r][i]
+                    for r, pp in enumerate(self.partial_profiles_):
+                        intensity = (1 - alpha) * pp[i - 1] + alpha * pp[i]
                         resampled_profile.partial_profiles_[r][k] = intensity
                 intensity = (1 - alpha) * self.intensity_[i - 1] + alpha * self.intensity_[i]
                 resampled_profile.q_[k] = q
@@ -483,7 +437,6 @@ class Profile:
             downsampled_profile.q_[k] = self.q_[index]
             downsampled_profile.intensity_[k] = self.intensity_[index]
             downsampled_profile.error_[k] = self.error_[index]
-
 
     def calculate_profile_symmetric(self, particles, n, ff_type):
         assert n > 1, f"Attempting to use symmetric computation, symmetry order should be > 1. Got: {n}"
@@ -518,7 +471,7 @@ class Profile:
                 for j in range(unit_size):
                     dist2 = get_squared_distance(units[0][i], units[in_][j])
                     r_dist.add_to_distribution(dist2, 2 * form_factors[i] * form_factors[j])
-        
+
         r_dist.scale(n)
 
         # distribution between units separated by distance n/2
@@ -539,32 +492,8 @@ class Profile:
 
         self.squared_distribution_2_profile(r_dist2)
 
-    """
-    def calculate_profile_real(self, particles1, particles2, ff_type):
-        print("start real profile calculation for " +
-                    str(particles1.size()) + " + " +
-                    str(particles2.size()) + " particles" + "\n")
-        r_dist = RadialDistributionFunction()  # fi(0) fj(0)
-
-        # Copy coordinates and form factors in advance to avoid n^2 copy operations
-        coordinates1 = particles1.coordinates
-        coordinates2 = particles2.coordinates
-        form_factors1 = get_form_factors(particles1, self.ff_table_, ff_type)
-        form_factors2 = get_form_factors(particles2, self.ff_table_, ff_type)
-
-        # Iterate over pairs of atoms
-        for i in range(len(coordinates1)):
-            for j in range(len(coordinates2)):
-                dist = get_squared_distance(coordinates1[i], coordinates2[j])
-                prod = form_factors1[i] * form_factors2[j]
-                r_dist.add_to_distribution(dist, 2 * prod)
-
-        self.squared_distribution_2_profile(r_dist)
-    """
-
     def distribution_2_profile(self, r_dist):
         self.init()
-
         # Iterate over intensity profile
         for k in range(self.size()):
             intensity_k = 0.0
@@ -635,22 +564,22 @@ class Profile:
         use_beam_profile = False
         if self.beam_profile_ is not None and self.beam_profile_.size() > 0:
             use_beam_profile = True
-        for k in range(len(self.q_)):
+        for k, f in enumerate(self.q_):
             for r in range(r_dist[0].size()):
                 if r_dist[0].distribution[r] > 0.0:
                     dist = distances[r]
                     x = 0.0
                     if use_beam_profile:
                         for t in range(self.beam_profile_.size()):
-                            x1 = dist * math.sqrt(self.q_[k]**2 + self.beam_profile_.q_[t]**2)
+                            x1 = dist * math.sqrt(f**2 + self.beam_profile_.q_[t]**2)
                             s = math.sin(x1)/x1 if x1 != 0 else 1
                             x += 2 * self.beam_profile_.intensity_[t] * s
                     else:
-                        x = dist * self.q_[k]
+                        x = dist * f
                         x = math.sin(x)/x if x != 0 else 1
                     for i in range(r_size):
                         self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i].distribution[r] * x)
-            corr = math.exp(-self.modulation_function_parameter_ * self.q_[k]**2)
+            corr = math.exp(-self.modulation_function_parameter_ * f**2)
             for i in range(r_size):
                 self.partial_profiles_[i][k] *= corr
 
@@ -663,11 +592,11 @@ class Profile:
         self.intensity_ += weight * other_profile.intensity_
 
     def add_profiles(self, profiles, weights):
-        for i in range(len(profiles)):
+        for i, e in enumerate(profiles):
             weight = 1.0
             if len(weights) > i:
                 weight = weights[i]
-            self.add(profiles[i], weight)
+            self.add(e, weight)
 
     def add_partial_profiles(self, other_profile, weight):
         if self.size() == 0:
@@ -681,11 +610,11 @@ class Profile:
             self.partial_profiles_[i] += weight * other_profile.partial_profiles_[i]
 
     def add_multiple_partial_profiles(self, profiles, weights):
-        for i in range(len(profiles)):
+        for i, e in enumerate(profiles):
             weight = 1.0
             if len(weights) > i:
                 weight = weights[i]
-            self.add_partial_profiles(profiles[i], weight)
+            self.add_partial_profiles(e, weight)
 
     def radius_of_gyration_fixed_q(self, end_q):
         data = []  # x=q^2, y=logI(q)) z=error(q)/I(q)
@@ -880,13 +809,18 @@ class Profile:
         else:
             self.calculate_profile_reciprocal(particles, ff_type)
 
-    """
-    def calculate_profile(self, particles1, particles2, ff_type=FormFactorType.HEAVY_ATOMS):
-        self.calculate_profile_real(particles1, particles2, ff_type)
-    """
-
     def size(self):
         return len(self.q_)
+
+def get_distance(vector1, vector2):
+    # Convert the vectors to NumPy arrays
+    array1 = np.array(vector1)
+    array2 = np.array(vector2)
+
+    # Calculate the squared distance
+    dist = np.sum(array1 - array2)
+
+    return dist
 
 def get_squared_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays

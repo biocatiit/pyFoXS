@@ -81,9 +81,9 @@ class ProfileFitter:
         default_chi = self.compute_score(partial_profile, use_offset)
 
         fp = self.search_fit_parameters(partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, float('inf'))
-        best_c1 = fp.get_c1()
-        best_c2 = fp.get_c2()
-        fp.set_default_chi_square(default_chi)
+        best_c1 = fp.c1
+        best_c2 = fp.c2
+        fp.default_chi_square = default_chi
         # Compute a profile for the best c1/c2 combination
         partial_profile.sum_partial_profiles(best_c1, best_c2)
         self.compute_score(partial_profile, use_offset, fit_file_name)

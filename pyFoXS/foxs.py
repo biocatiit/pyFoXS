@@ -3,12 +3,13 @@ This is the program for SAXS profile computation and fitting.
 see FOXS for webserver (salilab.org/foxs)
 """
 
+import os
 import sys
 import argparse
 import numpy as np
 
 from src import __version__
-from src.utils.utils import *
+from src.utils.utils import compute_profile, read_files, trim_extension
 from src.utils.Profile import Profile
 from src.utils.ProfileFitter import ProfileFitter
 from src.score.ChiScoreLog import ChiScoreLog
@@ -17,6 +18,7 @@ from src.score.RatioVolatilityScore import RatioVolatilityScore
 from src.utils.FitParameters import FitParameters
 from src.utils.Distribution import RadialDistributionFunction
 from src.structure.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
+from src.structure.Atom import compute_max_distance
 
 def main():
     """
@@ -248,20 +250,20 @@ def main():
                         dmax = compute_max_distance(particles_vec[i])
                         ns = int(round(exp_saxs_profile.max_q_ * dmax / np.pi))
                         K = chi_free
-                        cfs = ChiFreeScore(ns, K)
+                        cfs = ChiFreeScore(K, ns)
                         resampled_profile = Profile(qmin=exp_saxs_profile.min_q_, qmax=exp_saxs_profile.max_q_,
                                                     delta=exp_saxs_profile.delta_q_, constructor=0)
 
                         pf.resample(profile, resampled_profile)
-                        chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile)
-                        fp.set_chi_square(chi_free)
-            fp.set_pdb_file_name(pdb_files[i])
-            fp.set_profile_file_name(dat_file)
-            fp.set_mol_index(i)
+                        chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile, use_offset)
+                        fp.chi_square = chi_free
+            fp.pdb_file_name = pdb_files[i]
+            fp.profile_file_name = dat_file
+            fp.mol_index = i
             fp.show(sys.stdout)
             fps.append(fp)
 
-    fps.sort(key=lambda x: x.get_score())
+    fps.sort(key=lambda x: x.chi_square)
     return
 
 if __name__ == "__main__":

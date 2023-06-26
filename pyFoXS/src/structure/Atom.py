@@ -5,6 +5,7 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
 from enum import IntEnum
+from scipy.spatial import distance
 
 from .Residue import Residue
 
@@ -363,3 +364,35 @@ class Atom:
     @staticmethod
     def get_temperature_factor_key():
         return "tempFactor"
+
+class Chain:
+    def __init__(self, chain_id):
+        self.name = "Chain"
+        self.chain_id = chain_id
+        self.parent = None
+        self.residues = []
+
+def compute_max_distance(particles):
+    max_dist2 = 0.0
+    coordinates = [particle.coordinates for particle in particles]
+
+    for i in range(len(coordinates)):
+        for j in range(i + 1, len(coordinates)):
+            dist2 = distance.sqeuclidean(coordinates[i], coordinates[j])
+            if dist2 > max_dist2:
+                max_dist2 = dist2
+
+    return np.sqrt(max_dist2)
+
+def compute_max_distance_between_particles(particles1, particles2):
+    max_dist2 = 0.0
+    coordinates1 = [particle.coordinates for particle in particles1]
+    coordinates2 = [particle.coordinates for particle in particles2]
+
+    for i in range(len(coordinates1)):
+        for j in range(len(coordinates2)):
+            dist2 = distance.sqeuclidean(coordinates1[i], coordinates2[j])
+            if dist2 > max_dist2:
+                max_dist2 = dist2
+
+    return np.sqrt(max_dist2)

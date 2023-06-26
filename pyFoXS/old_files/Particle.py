@@ -102,6 +102,22 @@ def residue_particle(model, line):
 
     return p
 
+def get_by_type(root_particle, particle_type):
+    particles = []
+    visited = set()
+
+    def depth_first_search(particle):
+        visited.add(particle)
+        if isinstance(particle, particle_type):
+            particles.append(particle)
+
+        # if isinstance(particle, Particle):
+        #     for child in particle.children:
+        #         if child not in visited:
+        #             depth_first_search(child)
+
+    depth_first_search(root_particle)
+    return particles
 
 """
 class StructureProvenance(core.Provenance):
