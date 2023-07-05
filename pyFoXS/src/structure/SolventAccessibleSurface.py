@@ -22,9 +22,6 @@ class SolventAccessibleSurface:
         accessibility = 1.0 - (intersecting_count / len(sphere_dots))
         return accessibility
 
-    def get_solvent_accessible_surface(self, points, probe_radius=1.8, density=5.0):
-        return self.get_solvent_accessibility(points, probe_radius, density)
-
     def get_solvent_accessibility(self, ps, probe_radius=1.8, density=5.0):
         res = []
         # coordinates = [p.get_coordinates() for p in ps]
@@ -142,12 +139,12 @@ class SolventAccessibleSurface:
         num_equat = 2 * math.pi * radius * math.sqrt(density)
         vert_count = 0.5 * num_equat
 
-        for i in range(int(vert_count)):
+        for i in range(math.ceil(vert_count)):
             phi = (math.pi * i) / vert_count
             z = math.cos(phi)
             xy = math.sin(phi)
             horz_count = xy * num_equat
-            for j in range(int(horz_count - 1)):
+            for j in range(math.ceil(horz_count - 1)):
                 teta = (2 * math.pi * j) / horz_count
                 x = xy * math.cos(teta)
                 y = xy * math.sin(teta)

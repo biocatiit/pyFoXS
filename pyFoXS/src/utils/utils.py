@@ -219,7 +219,7 @@ def read_pdb_func(in_stream, name, filename, model, selector, select_first_model
         # if true, create a new Particle using the line and add it to the Model
         if line[:4] == "ATOM" or line[:6] == "HETATM":
             if not selector.get_is_selected(line):
-                print("Selector rejected line " + line)
+                # print("Selector rejected line " + line)
                 line = f.readline()
                 continue
 
