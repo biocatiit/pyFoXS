@@ -10,6 +10,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from ..structure.FormFactorTable import get_default_form_factor_table, FormFactorType
+from .function import SincFunction, ExpFunction
 from .Distribution import RadialDistributionFunction
 
 IMP_SAXS_DELTA_LIMIT = 1.0e-15
@@ -231,7 +232,6 @@ class Profile:
                 self.error_[i] = 1
                 for j in range(psize):
                     self.partial_profiles_[j][i] = partial_profiles[j][i]
-
         self.sum_partial_profiles(1.0, 0.0, False)
 
         if self.size() > 1:
@@ -353,7 +353,7 @@ class Profile:
 
     def sum_partial_profiles(self, c1, c2, check_cached=False):
         # precomputed exp function
-        # ef = internal.ExpFunction(square(self.get_max_q()) * 0.3, 0.00001)
+        ef = ExpFunction(self.max_q_ * self.max_q_ * 0.3, 0.00001)
 
         if len(self.partial_profiles_) == 0:
             return
@@ -370,15 +370,15 @@ class Profile:
         self.intensity_ = copy.deepcopy(self.partial_profiles_[0])
 
         if len(self.partial_profiles_) > 3:
-            self.intensity_ += square_c2 * self.partial_profiles_[3]
-            self.intensity_ += c2 * self.partial_profiles_[4]
+            self.intensity_ += square_c2 * copy.deepcopy(self.partial_profiles_[3])
+            self.intensity_ += c2 * copy.deepcopy(self.partial_profiles_[4])
 
         for k in range(self.size()):
             q = self.q_[k]
             x = coefficient * q * q
             G_q = cube_c1
             if abs(x) > 1.0e-8:
-                G_q *= math.exp(x)
+                G_q *= ef.exp(x)
 
             self.intensity_[k] += G_q * G_q * self.partial_profiles_[1][k]
             self.intensity_[k] -= G_q * self.partial_profiles_[2][k]
@@ -398,8 +398,8 @@ class Profile:
         resampled_profile.init(exp_profile.size(), len(self.partial_profiles_))
 
         for k in range(exp_profile.size()):
-            q = exp_profile.q_[k]
-            q_mapping_iterator = next((it for it in self.q_mapping_.items() if it[0] >= q), None)
+            q = copy.deepcopy(exp_profile.q_[k])
+            q_mapping_iterator = next((it for it in self.q_mapping_.items() if it[0] >= q), None)            
             # In case the experimental profile is longer than the computed one
             if q > self.max_q_ or q_mapping_iterator is None:
                 print("Profile " + self.name_ + " is not sampled for q = " + str(q) +
@@ -420,7 +420,6 @@ class Profile:
                 # Interpolate
                 alpha = (q - self.q_[i - 1]) / delta_q
                 alpha = min(alpha, 1.0) # Handle rounding errors
-
                 if self.partial_profiles_ and len(self.partial_profiles_) > 0:
                     for r, pp in enumerate(self.partial_profiles_):
                         intensity = (1 - alpha) * pp[i - 1] + alpha * pp[i]
@@ -428,15 +427,6 @@ class Profile:
                 intensity = (1 - alpha) * self.intensity_[i - 1] + alpha * self.intensity_[i]
                 resampled_profile.q_[k] = q
                 resampled_profile.intensity_[k] = intensity
-
-    def downsample(self, downsampled_profile, point_number):
-        points_delta = int(self.size() / point_number)
-        downsampled_profile.init(point_number)
-        for k in range(point_number):
-            index = k * points_delta
-            downsampled_profile.q_[k] = self.q_[index]
-            downsampled_profile.intensity_[k] = self.intensity_[index]
-            downsampled_profile.error_[k] = self.error_[index]
 
     def calculate_profile_symmetric(self, particles, n, ff_type):
         assert n > 1, f"Attempting to use symmetric computation, symmetry order should be > 1. Got: {n}"
@@ -510,8 +500,8 @@ class Profile:
     def squared_distribution_2_profile(self, r_dist):
         self.init()
         # Precomputed sin(x)/x function
-        # sf = internal.SincFunction(
-        #     math.sqrt(r_dist.get_max_distance()) * self.get_max_q(), 0.0001)
+        sf = SincFunction(
+            math.sqrt(r_dist.max_distance_) * self.max_q_, 0.0001)
 
         # Precompute square roots of distances
         distances = [0.0] * r_dist.size()
@@ -538,12 +528,13 @@ class Profile:
                         for t in range(self.beam_profile_.size()):
                             # x = 2*I(t)*sinc(sqrt(q^2+t^2))
                             x1 = dist * math.sqrt(self.q_[k]**2 + self.beam_profile_.q_[t]**2)
-                            s = math.sin(x1)/x1 if x1 != 0 else 1
-                            x += 2 * self.beam_profile_.intensity_[t] * s
+                            # s = math.sin(x1)/x1 if x1 != 0 else 1
+                            x += 2 * self.beam_profile_.intensity_[t] * sf.sinc(x1)
                     else:
                         # x = sin(dq)/dq
                         x = dist * self.q_[k]
-                        x = math.sin(x)/x if x != 0 else 1
+                        # x = math.sin(x)/x if x != 0 else 1
+                        x = sf.sinc(x)
 
                     # Multiply by the value from distribution
                     intensity_k += r_dist[r] * x
@@ -555,8 +546,9 @@ class Profile:
     def squared_distributions_2_partial_profiles(self, r_dist):
         r_size = len(r_dist)
         self.init(len(self.q_), r_size) # , reset=False)
-        # sf = SincFunction(
-        #     math.sqrt(r_dist[0].get_max_distance()) * self.max_q_, 0.0001)
+
+        sf = SincFunction(
+            math.sqrt(r_dist[0].max_distance_) * self.max_q_, 0.0001)
         distances = [0.0] * r_dist[0].size()
         for r in range(r_dist[0].size()):
             if r_dist[0].distribution[r] > 0.0:
@@ -571,140 +563,23 @@ class Profile:
                     x = 0.0
                     if use_beam_profile:
                         for t in range(self.beam_profile_.size()):
-                            x1 = dist * math.sqrt(f**2 + self.beam_profile_.q_[t]**2)
-                            s = math.sin(x1)/x1 if x1 != 0 else 1
-                            x += 2 * self.beam_profile_.intensity_[t] * s
+                            x1 = dist * math.sqrt(f*f + self.beam_profile_.q_[t]*self.beam_profile_.q_[t])
+                            # s = math.sin(x1)/x1 if x1 != 0 else 1
+                            x += 2 * self.beam_profile_.intensity_[t] * sf.sinc(x1)
                     else:
                         x = dist * f
-                        x = math.sin(x)/x if x != 0 else 1
+                        # x = math.sin(x)/x if x != 0 else 1
+                        x = sf.sinc(x)
+
                     for i in range(r_size):
+                        # WARNING: values here seem to be the same between C++ and Python but
+                        # with a precision difference, which creates after all the sums a bigger
+                        # difference
+                        print(r_dist[i].distribution[r], x)
                         self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i].distribution[r] * x)
-            corr = math.exp(-self.modulation_function_parameter_ * f**2)
+            corr = math.exp(-self.modulation_function_parameter_ * f*f)
             for i in range(r_size):
                 self.partial_profiles_[i][k] *= corr
-
-    def add(self, other_profile, weight):
-        if self.size() == 0 and other_profile.size() != 0:
-            self.min_q_ = other_profile.min_q_
-            self.max_q_ = other_profile.max_q_
-            self.delta_q_ = other_profile.delta_q_
-            self.init()
-        self.intensity_ += weight * other_profile.intensity_
-
-    def add_profiles(self, profiles, weights):
-        for i, e in enumerate(profiles):
-            weight = 1.0
-            if len(weights) > i:
-                weight = weights[i]
-            self.add(e, weight)
-
-    def add_partial_profiles(self, other_profile, weight):
-        if self.size() == 0:
-            self.init(self.size(), other_profile.partial_profiles_.size())
-        if len(other_profile.partial_profiles_) > 0 and len(self.partial_profiles_) == 0:
-            self.partial_profiles_ = [np.zeros(len(self.q_))] * len(other_profile.partial_profiles_)
-        if len(self.partial_profiles_) != len(other_profile.partial_profiles_):
-            print("Can't add different partial profile sizes:", len(self.partial_profiles_), "-", len(other_profile.partial_profiles_))
-            return
-        for i in range(len(self.partial_profiles_)):
-            self.partial_profiles_[i] += weight * other_profile.partial_profiles_[i]
-
-    def add_multiple_partial_profiles(self, profiles, weights):
-        for i, e in enumerate(profiles):
-            weight = 1.0
-            if len(weights) > i:
-                weight = weights[i]
-            self.add_partial_profiles(e, weight)
-
-    def radius_of_gyration_fixed_q(self, end_q):
-        data = []  # x=q^2, y=logI(q)) z=error(q)/I(q)
-        errors = []
-        for i in range(self.size()):
-            q = self.q_[i]
-            Iq = self.intensity_[i]
-            err = self.error_[i] / Iq
-            logIq = math.log(Iq)
-            if q > end_q:
-                break
-            v = np.array([q * q, logIq])
-            data.append(v)
-            errors.append(err)
-
-        data = np.array(data)
-        errors = np.array(errors)
-
-        def linear_fit(x, a, b):
-            return a * x + b
-
-        popt, _ = curve_fit(linear_fit, data[:, 0], data[:, 1], sigma=errors)
-        a = popt[0]
-        if a >= 0:
-            return 0.0
-        rg = math.sqrt(-3 * a)
-        return rg
-
-    def radius_of_gyration(self, end_q_rg):
-        qlimit = self.min_q_ + self.delta_q_ * 5  # start after 5 points
-        for q in np.arange(qlimit, self.max_q_, self.delta_q_):
-            rg = self.radius_of_gyration_fixed_q(q)
-            if rg > 0.0:
-                if q * rg < end_q_rg:
-                    qlimit = q
-                else:
-                    break
-        rg = self.radius_of_gyration_fixed_q(qlimit)
-        return rg
-
-    def mean_intensity(self):
-        mean = np.mean(self.intensity_)
-        return mean
-
-    def background_adjust(self, start_q):
-        data = []  # x=q^2, y=sum(q^2xI(q))
-        s = 0.0
-        for i in range(self.size()):
-            q = self.q_[i]
-            Iq = self.intensity_[i]
-            q2xIq = q * q * Iq
-            s += q2xIq
-            if q >= start_q:
-                v = np.array([q * q, s])
-                data.append(v)
-
-        data = np.array(data)
-
-        if data.size == 0:
-            print("No points in profile at or above start_q; no background adjustment done")
-            return
-
-        def parabolic_fit(x, a, b, c):
-            return a * x * x + b * x + c
-
-        popt, _ = curve_fit(parabolic_fit, data[:, 0], data[:, 1])
-        P3 = popt[0]
-        P2 = popt[1]
-        P1 = popt[2]
-        G1 = P2 / P1
-        G2 = 12.0 * (P3 / P1 - G1 * G1 / 4.0)
-
-        for i in range(self.size()):
-            q = self.q_[i]
-            q2 = q * q
-            q4 = q2 * q2
-            Iq = self.intensity_[i]
-            Iq_new = Iq / (1.0 + q2 * G1 + q4 * (G1 * G1 / 4.0 + G2 / 12.0))
-            self.intensity_[i] = Iq_new
-
-    def scale(self, c):
-        self.intensity_ *= c
-
-    def offset(self, c):
-        self.intensity_ -= c
-
-    def copy_errors(self, exp_profile):
-        if self.size() != exp_profile.size():
-            raise ValueError("Profile.copy_errors is supported only for profiles with the same q values!")
-        self.error_ = copy.deepcopy(exp_profile.error_)
 
     def profile_2_distribution(self, rd, max_distance):
         scale = 1.0 / (2 * math.pi * math.pi)

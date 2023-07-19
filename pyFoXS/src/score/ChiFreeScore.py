@@ -4,7 +4,6 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
-import random
 import numpy as np
 
 from ..utils.Profile import Profile
@@ -34,7 +33,7 @@ class ChiFreeScore:
 
         for k in range(self.K_):
             for i in range(self.ns_):
-                prob = random.uniform(0, 1)
+                prob = np.random.uniform(0, 1)
                 profile_index = int(i * bin_size + prob * bin_size)
                 if profile_index < exp_profile.size():
                     qs[i] = exp_profile.q_[profile_index]

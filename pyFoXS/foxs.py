@@ -243,6 +243,7 @@ def main():
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                 else:
+                    # default path
                     pf = ProfileFitter(exp_saxs_profile) # scoring_function=ChiScore() by default
                     fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
