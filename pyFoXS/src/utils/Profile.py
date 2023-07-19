@@ -575,7 +575,6 @@ class Profile:
                         # WARNING: values here seem to be the same between C++ and Python but
                         # with a precision difference, which creates after all the sums a bigger
                         # difference
-                        print(r_dist[i].distribution[r], x)
                         self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i].distribution[r] * x)
             corr = math.exp(-self.modulation_function_parameter_ * f*f)
             for i in range(r_size):
