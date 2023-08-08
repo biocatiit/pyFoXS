@@ -24,8 +24,9 @@ def main():
     """
     Main function to run pyFoXS in the terminal
     """
+    np.random.seed(42)
     profile_size = 500
-    max_q = 0.0 # change after read
+    max_q = 0.5 # change after read
     min_c1 = 0.99
     max_c1 = 1.05
     min_c2 = -2.0
@@ -46,7 +47,6 @@ def main():
     beam_profile_file = ""
     ab_initio = False
     vacuum = False
-    # javascript = False
     chi_free = 0
     pr_dmax = 0.0
 
@@ -57,7 +57,6 @@ def main():
     hidden.add_argument("--beam_profile", help="beam profile file name for desmearing", default=beam_profile_file)
     hidden.add_argument("--ab_initio", help="compute profile for a bead model with constant form factor (default = False)", action="store_true")
     hidden.add_argument("--vacuum", help="compute profile in vacuum (default = False)", action="store_true")
-    # hidden.add_argument("--javascript", help="output JavaScript for browser viewing of the results (default = False)", action="store_true")
     hidden.add_argument("--chi_free", help="compute chi-free instead of chi, specify iteration number (default = 0)", type=int, default=chi_free)
     hidden.add_argument("--pr_dmax", help="Dmax value for P(r) calculation. P(r) is calculated only if pr_dmax > 0", type=float, default=pr_dmax)
 
@@ -129,11 +128,23 @@ def main():
     if args.vacuum:
         vacuum = True
 
-    # if args.javascript:
-    #     javascript = True
-
     if args.volatility_ratio:
         vr_score = True
+
+    form_factor_table_file = args.form_factor_table
+    beam_profile_file = args.beam_profile
+    chi_free = args.chi_free
+    pr_dmax = args.pr_dmax
+
+    profile_size = args.profile_size
+    max_q = args.max_q
+    min_c1 = args.min_c1
+    max_c1 = args.max_c1
+    min_c2 = args.min_c2
+    max_c2 = args.max_c2
+    background_adjustment_q = args.background_q
+    multi_model_pdb = args.multi_model_pdb
+    units = args.units
 
     if multi_model_pdb not in (1, 2, 3):
         print(f"Incorrect option for multi_model_pdb {multi_model_pdb}")
@@ -166,8 +177,6 @@ def main():
     read_files(m, files, pdb_files, dat_files, particles_vec, exp_profiles,
             residue_level, heavy_atoms_only, multi_model_pdb, explicit_water,
             max_q, units)
-
-    max_q = 0.5
 
     if background_adjustment_q > 0.0:
         for profile in exp_profiles:
@@ -224,8 +233,9 @@ def main():
             pr.normalize()
             pr_file_name = pdb_files[i] + ".pr"
             with open(pr_file_name, "w") as pr_file:
-                pr_file.write("Distance distribution")
-                pr_file.write(pr.distribution)
+                pr_file.write("Distance distribution\n")
+                for item in pr.distribution:
+                    pr_file.write(str(item)+"\n")
 
         # 3. fit experimental profiles
         for j, dat_file in enumerate(dat_files):

@@ -18,7 +18,7 @@ IMP_SAXS_DELTA_LIMIT = 1.0e-15
 class Profile:
     modulation_function_parameter_ = 0.23
 
-    def __init__(self, qmin=0, qmax=0, delta=0, file_name="", fit_file=True, max_q=0, units=0, constructor=0):
+    def __init__(self, qmin=0, qmax=0, delta=1, file_name="", fit_file=True, max_q=0, units=1, constructor=0):
         if constructor == 0:
             self.min_q_ = qmin
             self.max_q_ = qmax
@@ -38,7 +38,7 @@ class Profile:
         self.name_ = file_name
         self.q_mapping_ = {}
         self.beam_profile_ = None
-        self.init()
+        # self.init()
 
     def init(self, size=0, partial_profiles_size=0):
         number_of_q_entries = size
@@ -76,6 +76,39 @@ class Profile:
             max_q = float(split_results[0])
 
         return max_q
+
+    def background_adjust(self, start_q):
+        data = []  # x=q^2, y=sum(q^2xI(q))
+        sum_val = 0.0
+        for i in range(self.size()):
+            q = self.q_[i]
+            Iq = self.intensity_[i]
+            q2xIq = q * q * Iq
+            sum_val += q2xIq
+            if q >= start_q:
+                v = (q * q, sum_val)
+                data.append(v)
+
+        if len(data) == 0:
+            print("No points in profile at or above start_q; no background adjustment done")
+            return
+
+        # Calculate the parabolic fit coefficients
+        x = np.array([item[0] for item in data])
+        y = np.array([item[1] for item in data])
+        coefficients = np.polyfit(x, y, 2)
+        P3, P2, P1 = coefficients
+
+        G1 = P2 / P1
+        G2 = 12.0 * (P3 / P1 - G1 * G1 / 4.0)
+
+        for i in range(len(self.q_)):
+            q = self.q_[i]
+            q2 = q * q
+            q4 = q2 * q2
+            Iq = self.intensity_[i]
+            Iq_new = Iq / (1.0 + q2 * G1 + q4 * (G1 * G1 / 4.0 + G2 / 12.0))
+            self.intensity_[i] = Iq_new
 
     def read_SAXS_file(self, file_name, fit_file, max_q, units):
         with open(file_name, 'r') as in_file:
@@ -143,7 +176,7 @@ class Profile:
 
         if self.size() > 1:
             self.min_q_ = self.q_[0]
-            self.max_q_ = self.q_[self.size() - 1]
+            self.max_q_ = self.q_[-1]
             if self.is_uniform_sampling():
                 diff = 0.0
                 for i in range(1, self.size()):
@@ -293,7 +326,7 @@ class Profile:
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()
         coordinates = [particle.coordinates for particle in particles]
-        ff = math.pow(form_factor, 2)
+        ff = 1 # np.square(form_factor)
 
         # iterate over pairs of atoms
         for i in range(len(coordinates)):
@@ -355,7 +388,7 @@ class Profile:
         # precomputed exp function
         ef = ExpFunction(self.max_q_ * self.max_q_ * 0.3, 0.00001)
 
-        if len(self.partial_profiles_) == 0:
+        if not hasattr(self, "partial_profiles_") or len(self.partial_profiles_) == 0:
             return
 
         # check if the profiles are already summed by this c1/c2 combination
@@ -376,7 +409,7 @@ class Profile:
         for k in range(self.size()):
             q = self.q_[k]
             x = coefficient * q * q
-            G_q = cube_c1
+            G_q = copy.deepcopy(cube_c1)
             if abs(x) > 1.0e-8:
                 G_q *= ef.exp(x)
 
@@ -395,7 +428,8 @@ class Profile:
             for k in range(self.size()):
                 self.q_mapping_[self.q_[k]] = k
         # Initialize
-        resampled_profile.init(exp_profile.size(), len(self.partial_profiles_))
+        size_pp = len(self.partial_profiles_) if hasattr(self, "partial_profiles_") else 0
+        resampled_profile.init(exp_profile.size(), size_pp)
 
         for k in range(exp_profile.size()):
             q = copy.deepcopy(exp_profile.q_[k])
@@ -411,7 +445,7 @@ class Profile:
             i = q_mapping_iterator[1]
             delta_q = 1.0
             if i == 0 or (delta_q := self.q_[i] - self.q_[i - 1]) <= 1.0e-16:
-                if self.partial_profiles_:
+                if hasattr(self, "partial_profiles_") and len(self.partial_profiles_) > 0:
                     for r, pp in enumerate(self.partial_profiles_):
                         resampled_profile.partial_profiles_[r][k] = pp[i]
                 resampled_profile.q_[k] = q
@@ -420,7 +454,7 @@ class Profile:
                 # Interpolate
                 alpha = (q - self.q_[i - 1]) / delta_q
                 alpha = min(alpha, 1.0) # Handle rounding errors
-                if self.partial_profiles_ and len(self.partial_profiles_) > 0:
+                if hasattr(self, "partial_profiles_") and len(self.partial_profiles_) > 0:
                     for r, pp in enumerate(self.partial_profiles_):
                         intensity = (1 - alpha) * pp[i - 1] + alpha * pp[i]
                         resampled_profile.partial_profiles_[r][k] = intensity
@@ -506,7 +540,7 @@ class Profile:
         # Precompute square roots of distances
         distances = [0.0] * r_dist.size()
         for r in range(r_dist.size()):
-            if r_dist[r] != 0.0:
+            if r_dist.distribution[r] != 0.0:
                 distances[r] = math.sqrt(r_dist.get_distance_from_index(r))
 
         use_beam_profile = False
@@ -519,7 +553,7 @@ class Profile:
 
             # Iterate over radial distribution
             for r in range(r_dist.size()):
-                if r_dist[r] != 0.0:
+                if r_dist.distribution[r] != 0.0:
                     dist = distances[r]
                     x = 0.0
 
@@ -537,7 +571,7 @@ class Profile:
                         x = sf.sinc(x)
 
                     # Multiply by the value from distribution
-                    intensity_k += r_dist[r] * x
+                    intensity_k += r_dist.distribution[r] * x
 
             # Correction for the form factor approximation
             intensity_k *= math.exp(-self.modulation_function_parameter_ * self.q_[k]**2)
@@ -545,7 +579,7 @@ class Profile:
 
     def squared_distributions_2_partial_profiles(self, r_dist):
         r_size = len(r_dist)
-        self.init(len(self.q_), r_size) # , reset=False)
+        self.init(self.size(), r_size) # , reset=False)
 
         sf = SincFunction(
             math.sqrt(r_dist[0].max_distance_) * self.max_q_, 0.0001)
@@ -575,6 +609,7 @@ class Profile:
                         # WARNING: values here seem to be the same between C++ and Python but
                         # with a precision difference, which creates after all the sums a bigger
                         # difference
+                        # WARNING: x is different after the 9th decimal
                         self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i].distribution[r] * x)
             corr = math.exp(-self.modulation_function_parameter_ * f*f)
             for i in range(r_size):
@@ -684,7 +719,7 @@ class Profile:
             self.calculate_profile_reciprocal(particles, ff_type)
 
     def size(self):
-        return len(self.q_)
+        return len(self.q_) if hasattr(self, "q_") else 0
 
 def get_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays

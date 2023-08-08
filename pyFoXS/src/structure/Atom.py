@@ -4,6 +4,7 @@
 Copyright 2007-2022 IMP Inventors. All rights reserved.
 """
 
+import numpy as np
 from enum import IntEnum
 from scipy.spatial import distance
 

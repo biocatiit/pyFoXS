@@ -23,7 +23,7 @@ class ChiFreeScore:
             raise ValueError("ChiFreeScore.compute_score is supported only for profiles with the same q values!")
 
         self.last_scale_updated_ = False
-        chis = np.zeros(self.K_, dtype=(float, float))
+        chis = [0] * self.K_
         bin_size = np.floor(exp_profile.size() / self.ns_)
 
         qs = np.zeros(self.ns_)
@@ -41,8 +41,13 @@ class ChiFreeScore:
                     exp_intensities[i] = exp_profile.intensity_[profile_index]
                     model_intensities[i] = model_profile.intensity_[profile_index]
 
-            exp_profile_selection = Profile(qs, exp_intensities, errors)
-            model_profile_selection = Profile(qs, model_intensities)
+            exp_profile_selection = Profile()
+            exp_profile_selection.q_ = qs
+            exp_profile_selection.intensity_ = exp_intensities
+            exp_profile_selection.error_ = errors
+            model_profile_selection = Profile()
+            model_profile_selection.q_ = qs
+            model_profile_selection.intensity_ = model_intensities
 
             offset = 0.0
             if use_offset:
@@ -53,7 +58,7 @@ class ChiFreeScore:
             profile_size = min(model_profile_selection.size(), exp_profile_selection.size())
             for i in range(profile_size):
                 square_error = exp_profile_selection.error_[i]**2
-                weight_tilda = model_profile_selection.weight_[i] / square_error
+                weight_tilda = 1 / square_error # model_profile_selection.weight_[i] / square_error
                 delta = exp_profile_selection.intensity_[i] - offset - c * model_profile_selection.intensity_[i]
                 if abs(delta / exp_profile_selection.intensity_[i]) >= 1.0e-15:
                     chi_square += weight_tilda * delta**2
@@ -75,7 +80,7 @@ class ChiFreeScore:
         profile_size = min(model_profile.size(), exp_profile.size())
         for k in range(profile_size):
             square_error = exp_profile.error_[k]**2
-            weight_tilda = model_profile.weight_[k] / square_error
+            weight_tilda = 1 / square_error # model_profile.weight_[k] / square_error
             sum1 += weight_tilda * model_profile.intensity_[k] * (exp_profile.intensity_[k] - offset)
             sum2 += weight_tilda * model_profile.intensity_[k]**2
 
@@ -90,7 +95,7 @@ class ChiFreeScore:
         profile_size = min(model_profile.size(), exp_profile.size())
         for k in range(profile_size):
             square_error = exp_profile.error_[k]**2
-            weight_tilda = model_profile.weight_[k] / square_error
+            weight_tilda = 1 / square_error # model_profile.weight_[k] / square_error
             sum_iexp_imod += weight_tilda * model_profile.intensity_[k] * exp_profile.intensity_[k]
             sum_imod += weight_tilda * model_profile.intensity_[k]
             sum_iexp += weight_tilda * exp_profile.intensity_[k]

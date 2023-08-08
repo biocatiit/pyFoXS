@@ -96,6 +96,7 @@ class ProfileFitter:
             delta=self.exp_profile_.delta_q_,
             constructor=0
         )
+        # model_profile and resampled_profile might be different than the C++ version
         model_profile.resample(self.exp_profile_, resampled_profile)
         score = self.scoring_function_.compute_score(self.exp_profile_, resampled_profile, use_offset)
 

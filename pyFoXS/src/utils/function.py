@@ -13,6 +13,7 @@ class SincFunction:
     def sinc(self, x):
         index = self.value2index(x)
         x = index * self.bin_size_
+        # WARNING: this function might create a difference with the C++ code (precision difference)
         return sinc_pi(x)
 
 def sinc_pi(x):

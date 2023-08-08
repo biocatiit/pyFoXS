@@ -247,7 +247,7 @@ class FormFactorTable:
             return self.residue_type_form_factor_map_[rt].vacuum_ff_
         else:
             print("Can't find form factor for residue", rt, "using default value of ALA")
-            return self.residue_type_form_factor_map_[self.FormFactorAtomType.UNK].vacuum_ff_
+            return self.residue_type_form_factor_map_[ResidueType.UNK].vacuum_ff_
 
     def get_dummy_form_factor(self, p, ff_type):
         if ff_type == FormFactorType.CA_ATOMS:
@@ -274,9 +274,9 @@ class FormFactorTable:
         if rt in self.residue_type_form_factor_map_:
             return self.residue_type_form_factor_map_[rt].dummy_ff_
         else:
-            print("Can't find form factor for residue " + rt +
+            print("Can't find form factor for residue ", rt,
                     " using default value of ALA")
-            return self.residue_type_form_factor_map_[self.FormFactorAtomType.UNK].dummy_ff_
+            return self.residue_type_form_factor_map_[ResidueType.UNK].dummy_ff_
 
     def get_form_factor_atom_type(self, p, ff_type):
         ad = p

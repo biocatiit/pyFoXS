@@ -9,7 +9,7 @@ import numpy as np
 from .ChiScore import ChiScore
 
 class RatioVolatilityScore:
-    def __init__(self, dmax=1):
+    def __init__(self, dmax=400):
         self.dmax_ = dmax
 
     def compute_score(self, exp_profile, model_profile, use_offset):
@@ -17,7 +17,7 @@ class RatioVolatilityScore:
             raise ValueError("RatioVolatilityScore::compute_score is supported only for profiles with the same q values!")
 
         bin_size = np.pi / self.dmax_
-        number_of_bins = np.floor(exp_profile.max_q_ / bin_size)
+        number_of_bins = int(exp_profile.max_q_ / bin_size)
         number_of_points_in_bin = exp_profile.size() / number_of_bins
 
         ratio = np.zeros(number_of_bins)

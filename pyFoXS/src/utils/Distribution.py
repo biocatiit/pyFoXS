@@ -36,6 +36,7 @@ class RadialDistributionFunction:
         if index >= len(self.distribution):
             ext = [0.0] * (index-self.size()+1)
             self.distribution.extend(ext)
+            self.max_distance_ = self.get_distance_from_index(index + 1)
         self.distribution[index] += value
 
     def get_distance_from_index(self, index):
