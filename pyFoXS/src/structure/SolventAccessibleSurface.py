@@ -7,6 +7,7 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 import math
 import numpy as np
 from scipy import spatial
+from numba import jit
 
 class SolventAccessibleSurface:
     def __init__(self):
@@ -17,17 +18,15 @@ class SolventAccessibleSurface:
         sphere_dots = self.create_sphere_dots(probe_radius, density)
         intersecting_count = 0
         for sphere_center, radius in sphere_dots:
-            if self.is_intersecting(point, sphere_center, point[3], radius):
+            if is_intersecting(point, sphere_center, point[3], radius):
                 intersecting_count += 1
         accessibility = 1.0 - (intersecting_count / len(sphere_dots))
         return accessibility
 
     def get_solvent_accessibility(self, ps, probe_radius=1.8, density=5.0):
         res = []
-        # coordinates = [p.get_coordinates() for p in ps]
-        # radii = [p.get_radius() for p in ps]
-        coordinates = [p.coordinates for p in ps]
-        radii = [p.radius for p in ps]
+        coordinates = np.array([p.coordinates for p in ps])
+        radii = np.array([p.radius for p in ps])
 
         # generate sphere dots for radii present in the ps set
         self.create_sphere_dots(ps, density)
@@ -40,18 +39,14 @@ class SolventAccessibleSurface:
         for i in range(len(ps)):
             atom_radius = radii[i]
             radius = atom_radius + 2 * probe_radius + max_radius
-            # query
-            # bb = self.get_bounding_box(coordinates[i], radius)
+
             inside_rad = grid.query_ball_point(coordinates[i], radius)
-            # lb, ub = grid.query(bb[0]), grid.query(bb[1])
+
             neighbours1, neighbours2 = [], []
             for mol_index in inside_rad:
-            # for it in grid.indexes_begin(lb, ub):
-            #     for vIndex in range(len(grid[it])):
-                # mol_index = grid[it][vIndex]
                 radius_sum1 = atom_radius + radii[mol_index]
                 radius_sum2 = radius_sum1 + 2 * probe_radius
-                dist2 = self.get_squared_distance(coordinates[i], coordinates[mol_index])
+                dist2 = get_squared_distance(coordinates[i], coordinates[mol_index])
                 if dist2 < radius_sum1 * radius_sum1:
                     neighbours1.append(mol_index)
                 elif dist2 < radius_sum2 * radius_sum2:
@@ -66,13 +61,13 @@ class SolventAccessibleSurface:
                 # check for intersection with neighbors1
                 collides = False
                 for n_index in range(len(neighbours1)):
-                    if self.is_intersecting(probe_center, coordinates[neighbours1[n_index]],
+                    if is_intersecting(probe_center, coordinates[neighbours1[n_index]],
                                             probe_radius, radii[neighbours1[n_index]]):
                         collides = True
                         break
-                if not collides:  # check for intersection with neighbors2
+                if not collides: # check for intersection with neighbors2
                     for n_index in range(len(neighbours2)):
-                        if self.is_intersecting(probe_center, coordinates[neighbours2[n_index]],
+                        if is_intersecting(probe_center, coordinates[neighbours2[n_index]],
                                                 probe_radius, radii[neighbours2[n_index]]):
                             collides = True
                             break
@@ -93,25 +88,6 @@ class SolventAccessibleSurface:
         nearest_index = np.argmin(distances)
 
         return nearest_index
-
-    def get_bounding_box(self, coordinates, radius=0.0):
-        coordinates = [coordinates]
-        min_point = [min(coord[:][i] for coord in coordinates) - radius for i in range(3)]
-        max_point = [max(coord[:][i] for coord in coordinates) + radius for i in range(3)]
-        return [min_point, max_point]
-
-    def is_intersecting(self, center1, center2, radius1, radius2):
-        squared_radius_sum = (radius1 + radius2) * (radius1 + radius2)
-        squared_dist = self.get_squared_distance(center1, center2)
-        if abs(squared_radius_sum - squared_dist) < 0.0001:
-            return False
-        if squared_radius_sum > squared_dist:
-            return True
-        return False
-
-    def get_squared_distance(self, v1, v2):
-        squared_dist = sum((x1 - x2) ** 2 for x1, x2 in zip(v1, v2))
-        return squared_dist
 
     def create_sphere_dots(self, ps, density):
         radii2type = {}
@@ -150,3 +126,20 @@ class SolventAccessibleSurface:
                 y = xy * math.sin(teta)
                 res.append((radius * x, radius * y, radius * z))
         return res
+
+@jit(target_backend='cuda', nopython=True)
+def get_squared_distance(v1, v2):
+    squared_dist = 0.0
+    for i in range(3):
+        squared_dist += (v1[i] - v2[i]) ** 2
+    return squared_dist
+
+@jit(target_backend='cuda', nopython=True)
+def is_intersecting(center1, center2, radius1, radius2):
+    squared_radius_sum = (radius1 + radius2) * (radius1 + radius2)
+    squared_dist = get_squared_distance(center1, center2)
+    if abs(squared_radius_sum - squared_dist) < 0.0001:
+        return False
+    if squared_radius_sum > squared_dist:
+        return True
+    return False

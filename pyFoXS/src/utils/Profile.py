@@ -7,11 +7,11 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 import copy
 import math
 import numpy as np
-from scipy.optimize import curve_fit
+from numba import jit
 
 from ..structure.FormFactorTable import get_default_form_factor_table, FormFactorType
 from .function import SincFunction, ExpFunction
-from .Distribution import RadialDistributionFunction
+from .Distribution import RadialDistributionFunction, get_index_from_distance, get_distance_from_index
 
 IMP_SAXS_DELTA_LIMIT = 1.0e-15
 
@@ -400,16 +400,16 @@ class Profile:
         square_c2 = c2 * c2
         cube_c1 = c1 * c1 * c1
 
-        self.intensity_ = copy.deepcopy(self.partial_profiles_[0])
+        self.intensity_ = copy.copy(self.partial_profiles_[0])
 
         if len(self.partial_profiles_) > 3:
-            self.intensity_ += square_c2 * copy.deepcopy(self.partial_profiles_[3])
-            self.intensity_ += c2 * copy.deepcopy(self.partial_profiles_[4])
+            self.intensity_ += square_c2 * self.partial_profiles_[3]
+            self.intensity_ += c2 * self.partial_profiles_[4]
 
         for k in range(self.size()):
             q = self.q_[k]
             x = coefficient * q * q
-            G_q = copy.deepcopy(cube_c1)
+            G_q = cube_c1
             if abs(x) > 1.0e-8:
                 G_q *= ef.exp(x)
 
@@ -432,7 +432,7 @@ class Profile:
         resampled_profile.init(exp_profile.size(), size_pp)
 
         for k in range(exp_profile.size()):
-            q = copy.deepcopy(exp_profile.q_[k])
+            q = exp_profile.q_[k]
             q_mapping_iterator = next((it for it in self.q_mapping_.items() if it[0] >= q), None)            
             # In case the experimental profile is longer than the computed one
             if q > self.max_q_ or q_mapping_iterator is None:
@@ -524,7 +524,7 @@ class Profile:
 
             # Iterate over radial distribution
             for r in range(r_dist.size()):
-                dist = r_dist.get_distance_from_index(r)
+                dist = get_distance_from_index(r_dist.bin_size, r)
                 x = dist * self.q_[k]
                 x = math.sin(x)/x if x != 0 else 1
                 intensity_k += r_dist[r] * x
@@ -541,7 +541,7 @@ class Profile:
         distances = [0.0] * r_dist.size()
         for r in range(r_dist.size()):
             if r_dist.distribution[r] != 0.0:
-                distances[r] = math.sqrt(r_dist.get_distance_from_index(r))
+                distances[r] = math.sqrt(get_distance_from_index(r_dist.bin_size, r))
 
         use_beam_profile = False
         if self.beam_profile_ is not None and len(self.beam_profile_) > 0:
@@ -579,14 +579,13 @@ class Profile:
 
     def squared_distributions_2_partial_profiles(self, r_dist):
         r_size = len(r_dist)
-        self.init(self.size(), r_size) # , reset=False)
+        self.init(self.size(), r_size) # reset=False
 
-        sf = SincFunction(
-            math.sqrt(r_dist[0].max_distance_) * self.max_q_, 0.0001)
-        distances = [0.0] * r_dist[0].size()
-        for r in range(r_dist[0].size()):
-            if r_dist[0].distribution[r] > 0.0:
-                distances[r] = math.sqrt(r_dist[0].get_distance_from_index(r))
+        sf = SincFunction(math.sqrt(r_dist[0].max_distance_) * self.max_q_, 0.0001)
+        distances = np.zeros(r_dist[0].size())
+        non_zero_indices = np.where(r_dist[0].distribution > 0.0)[0]
+        distances[non_zero_indices] = np.sqrt(get_distance_from_index(r_dist[0].bin_size, non_zero_indices))
+
         use_beam_profile = False
         if self.beam_profile_ is not None and self.beam_profile_.size() > 0:
             use_beam_profile = True
@@ -594,30 +593,27 @@ class Profile:
             for r in range(r_dist[0].size()):
                 if r_dist[0].distribution[r] > 0.0:
                     dist = distances[r]
-                    x = 0.0
+                    
                     if use_beam_profile:
-                        for t in range(self.beam_profile_.size()):
-                            x1 = dist * math.sqrt(f*f + self.beam_profile_.q_[t]*self.beam_profile_.q_[t])
-                            # s = math.sin(x1)/x1 if x1 != 0 else 1
-                            x += 2 * self.beam_profile_.intensity_[t] * sf.sinc(x1)
+                        x1 = dist * np.sqrt(f*f + self.beam_profile_.q_**2)
+                        x = np.sum(2 * self.beam_profile_.intensity_ * sf.sinc(x1))
                     else:
                         x = dist * f
-                        # x = math.sin(x)/x if x != 0 else 1
                         x = sf.sinc(x)
 
                     for i in range(r_size):
                         # WARNING: values here seem to be the same between C++ and Python but
                         # with a precision difference, which creates after all the sums a bigger
                         # difference
-                        # WARNING: x is different after the 9th decimal
-                        self.partial_profiles_[i][k] += copy.deepcopy(r_dist[i].distribution[r] * x)
-            corr = math.exp(-self.modulation_function_parameter_ * f*f)
+                        self.partial_profiles_[i][k] += r_dist[i].distribution[r] * x
+
+            corr = math.exp(-self.modulation_function_parameter_ * f * f)
             for i in range(r_size):
                 self.partial_profiles_[i][k] *= corr
 
     def profile_2_distribution(self, rd, max_distance):
         scale = 1.0 / (2 * math.pi * math.pi)
-        distribution_size = rd.get_index_from_distance(max_distance) + 1
+        distribution_size = get_index_from_distance(rd.bin_size, max_distance) + 1
 
         # Offset profile so that the minimal i(q) is zero
         min_value = self.intensity_[0]
@@ -631,7 +627,7 @@ class Profile:
 
         # Iterate over r
         for i in range(distribution_size):
-            r = rd.get_distance_from_index(i)
+            r = get_distance_from_index(rd.bin_size, i)
             s = 0.0
             # Sum over q: SUM (I(q)*q*sin(qr))
             for k in range(p.size()):
@@ -721,6 +717,7 @@ class Profile:
     def size(self):
         return len(self.q_) if hasattr(self, "q_") else 0
 
+@jit(target_backend='cuda', nopython=True)
 def get_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -731,6 +728,7 @@ def get_distance(vector1, vector2):
 
     return dist
 
+@jit(target_backend='cuda', nopython=True)
 def get_squared_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
