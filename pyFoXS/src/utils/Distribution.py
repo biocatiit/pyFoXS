@@ -9,7 +9,7 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 import numpy as np
 from numba import jit
 
-class RadialDistributionFunction:
+class RadialDistributionFunction(object):
     def __init__(self, bin_size=0.5):
         self.bin_size = bin_size
         self.distribution = np.array([0.0])
@@ -40,10 +40,10 @@ class RadialDistributionFunction:
     def size(self):
         return self.distribution.shape[0]
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def get_index_from_distance(bin_size, dist):
         return round(dist * 1/bin_size)
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def get_distance_from_index(bin_size, index):
     return index * bin_size

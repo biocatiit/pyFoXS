@@ -10,7 +10,7 @@ import numpy as np
 from numba import jit
 
 from ..structure.FormFactorTable import get_default_form_factor_table, FormFactorType
-from .function import SincFunction, ExpFunction
+from .function import SincFunction, ExpFunction, sinc
 from .Distribution import RadialDistributionFunction, get_index_from_distance, get_distance_from_index
 
 IMP_SAXS_DELTA_LIMIT = 1.0e-15
@@ -543,35 +543,18 @@ class Profile:
             if r_dist.distribution[r] != 0.0:
                 distances[r] = math.sqrt(get_distance_from_index(r_dist.bin_size, r))
 
+        distances = np.array(distances)
+
         use_beam_profile = False
         if self.beam_profile_ is not None and len(self.beam_profile_) > 0:
             use_beam_profile = True
 
         # Iterate over intensity profile
         for k in range(self.size()):
-            intensity_k = 0.0
 
-            # Iterate over radial distribution
-            for r in range(r_dist.size()):
-                if r_dist.distribution[r] != 0.0:
-                    dist = distances[r]
-                    x = 0.0
-
-                    if use_beam_profile:
-                        # Iterate over beam profile
-                        for t in range(self.beam_profile_.size()):
-                            # x = 2*I(t)*sinc(sqrt(q^2+t^2))
-                            x1 = dist * math.sqrt(self.q_[k]**2 + self.beam_profile_.q_[t]**2)
-                            # s = math.sin(x1)/x1 if x1 != 0 else 1
-                            x += 2 * self.beam_profile_.intensity_[t] * sf.sinc(x1)
-                    else:
-                        # x = sin(dq)/dq
-                        x = dist * self.q_[k]
-                        # x = math.sin(x)/x if x != 0 else 1
-                        x = sf.sinc(x)
-
-                    # Multiply by the value from distribution
-                    intensity_k += r_dist.distribution[r] * x
+            intensity_k = _inner_squared_distribution_2_profile(distances,
+                r_dist.distribution, self.q_[k], sf.one_over_bin_size_,
+                sf.bin_size_)
 
             # Correction for the form factor approximation
             intensity_k *= math.exp(-self.modulation_function_parameter_ * self.q_[k]**2)
@@ -717,7 +700,7 @@ class Profile:
     def size(self):
         return len(self.q_) if hasattr(self, "q_") else 0
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def get_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -728,7 +711,7 @@ def get_distance(vector1, vector2):
 
     return dist
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def get_squared_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -738,3 +721,22 @@ def get_squared_distance(vector1, vector2):
     squared_dist = np.sum((array1 - array2) ** 2)
 
     return squared_dist
+
+@jit(nopython=True)
+def _inner_squared_distribution_2_profile(distances, distribution, qk,
+    one_over_bin_size, bin_size):
+    intensity_k = 0.0
+
+    # Iterate over radial distribution
+    for r in range(distribution.shape[0]):
+        if distribution[r] != 0.0:
+            dist = distances[r]
+            # x = sin(dq)/dq
+            tx = dist * qk
+            # x = math.sin(x)/x if x != 0 else 1
+            x = sinc(tx, one_over_bin_size, bin_size)
+
+            # Multiply by the value from distribution
+            intensity_k += distribution[r] * x
+
+    return intensity_k

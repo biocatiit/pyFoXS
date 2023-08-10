@@ -4,7 +4,7 @@ from numba import jit
 
 fourth_eps = sys.float_info.epsilon**(1/4)
 
-class SincFunction:
+class SincFunction(object):
     def __init__(self, max_value, bin_size):
         self.bin_size_ = bin_size
         self.one_over_bin_size_ = 1.0 / bin_size
@@ -14,11 +14,15 @@ class SincFunction:
         # WARNING: this function might create a difference with the C++ code (precision difference)
         return sinc_pi(x, self.one_over_bin_size_, self.bin_size_)
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
+def sinc(x, one_over_bin_size, bin_size):
+    return sinc_pi(x, one_over_bin_size, bin_size)
+
+@jit(nopython=True)
 def value2index(one_over_bin_size_, value):
     return int(value * one_over_bin_size_ + 0.5)
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def sinc_pi(x, one_over_bin_size_, bin_size_):
     index = value2index(one_over_bin_size_, x)
     x = index * bin_size_

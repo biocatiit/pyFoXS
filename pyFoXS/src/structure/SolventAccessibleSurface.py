@@ -127,14 +127,14 @@ class SolventAccessibleSurface:
                 res.append((radius * x, radius * y, radius * z))
         return res
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def get_squared_distance(v1, v2):
     squared_dist = 0.0
     for i in range(3):
         squared_dist += (v1[i] - v2[i]) ** 2
     return squared_dist
 
-@jit(target_backend='cuda', nopython=True)
+@jit(nopython=True)
 def is_intersecting(center1, center2, radius1, radius2):
     squared_radius_sum = (radius1 + radius2) * (radius1 + radius2)
     squared_dist = get_squared_distance(center1, center2)
