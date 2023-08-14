@@ -56,7 +56,7 @@ class ProfileFitter:
             c2 = min_c2
             for _ in range(c2_cells + 1):
                 partial_profile.sum_partial_profiles(c1, c2)
-                curr_chi = self.compute_score(partial_profile, use_offset)
+                curr_chi, fit_profile = self.compute_score(partial_profile, use_offset)
                 if not best_set or curr_chi < best_chi:
                     best_set = True
                     best_chi = curr_chi
@@ -73,21 +73,23 @@ class ProfileFitter:
             return self.search_fit_parameters(partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, best_chi)
         return FitParameters(best_chi, best_c1, best_c2)
 
-    def fit_profile(self, partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, fit_file_name):
+    def fit_profile(self, partial_profile, min_c1, max_c1, min_c2, max_c2,
+        use_offset, fit_file_name):
         # Compute chi value for default c1/c2
         default_c1 = 1.0
         default_c2 = 0.0
         partial_profile.sum_partial_profiles(default_c1, default_c2)
-        default_chi = self.compute_score(partial_profile, use_offset)
+        default_chi, fit_profile = self.compute_score(partial_profile, use_offset)
 
-        fp = self.search_fit_parameters(partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, float('inf'))
+        fp = self.search_fit_parameters(partial_profile, min_c1, max_c1,
+            min_c2, max_c2, use_offset, float('inf'))
         best_c1 = fp.c1
         best_c2 = fp.c2
         fp.default_chi_square = default_chi
         # Compute a profile for the best c1/c2 combination
         partial_profile.sum_partial_profiles(best_c1, best_c2)
-        self.compute_score(partial_profile, use_offset, fit_file_name)
-        return fp
+        score, fit_profile = self.compute_score(partial_profile, use_offset, fit_file_name)
+        return fp, fit_profile
 
     def compute_score(self, model_profile, use_offset, fit_file_name=""):
         resampled_profile = Profile(
@@ -98,15 +100,23 @@ class ProfileFitter:
         )
         # model_profile and resampled_profile might be different than the C++ version
         model_profile.resample(self.exp_profile_, resampled_profile)
-        score = self.scoring_function_.compute_score(self.exp_profile_, resampled_profile, use_offset)
+        score = self.scoring_function_.compute_score(self.exp_profile_,
+            resampled_profile, use_offset)
+
+        offset = 0.0
+        if use_offset:
+            offset = self.scoring_function_.compute_offset(self.exp_profile_,
+                resampled_profile)
+        c = self.scoring_function_.compute_scale_factor(self.exp_profile_,
+            resampled_profile, offset)
 
         if len(fit_file_name) > 0:
-            offset = 0.0
-            if use_offset:
-                offset = self.scoring_function_.compute_offset(self.exp_profile_, resampled_profile)
-            c = self.scoring_function_.compute_scale_factor(self.exp_profile_, resampled_profile, offset)
-            self.write_SAXS_fit_file(fit_file_name, resampled_profile, score, c, offset)
-        return score
+            self.write_SAXS_fit_file(fit_file_name, resampled_profile, score,
+                c, offset)
+
+        for i in range(resampled_profile.size()):
+            resampled_profile.intensity_[i] = resampled_profile.intensity_[i]* c - offset
+        return score, resampled_profile
 
     def write_SAXS_fit_file(self, file_name, model_profile, score, c, offset):
         with open(file_name, "w") as out_file:

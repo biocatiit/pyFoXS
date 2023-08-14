@@ -78,6 +78,7 @@ def main():
     parser.add_argument("--units", "-u", help="1 - unknown --> determine automatically (default) 2 - q values are in 1/A, 3 - q values are in 1/nm", type=int, default=units)
     parser.add_argument("--volatility_ratio", "-v", help="calculate volatility ratio score (default = False)", action="store_true")
     parser.add_argument("--score_log", "-l", help="use log(intensity) in fitting and scoring (default = False)", action="store_true")
+    parser.add_argument("--random_seed", "-rs", help="Input an integer random seed to use.", default=None)
     # parser.add_argument("--gnuplot_script", "-g", help="print gnuplot script for gnuplot viewing (default = False)", action="store_true")
 
     args = parser.parse_args()
@@ -127,6 +128,10 @@ def main():
     if args.volatility_ratio:
         vr_score = True
 
+    random_seed = args.random_seed
+    if random_seed is not None:
+        random_seed = int(random_seed)
+
     form_factor_table_file = args.form_factor_table
     beam_profile_file = args.beam_profile
     chi_free = args.chi_free
@@ -153,7 +158,8 @@ def main():
         score_log=score_log, explicit_water=explicit_water,
         form_factor_table_file=form_factor_table_file,
         beam_profile_file=beam_profile_file, ab_initio=ab_initio,
-        vacuum=vacuum, chi_free=chi_free, pr_dmax=pr_dmax, write_output=True)
+        vacuum=vacuum, chi_free=chi_free, pr_dmax=pr_dmax, write_output=True,
+        random_seed=random_seed)
 
     # if multi_model_pdb not in (1, 2, 3):
     #     print(f"Incorrect option for multi_model_pdb {multi_model_pdb}")

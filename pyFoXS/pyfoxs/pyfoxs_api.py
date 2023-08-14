@@ -27,11 +27,13 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
     background_adjustment_q=0.0, use_offset=False, write_partial_profile=False,
     multi_model_pdb=1, units=1, vr_score=False, score_log=False,
     explicit_water=False, form_factor_table_file="", beam_profile_file="",
-    ab_initio=False, vacuum=False, chi_free=0, pr_dmax=0.0, write_output=True):
+    ab_initio=False, vacuum=False, chi_free=0, pr_dmax=0.0, write_output=True,
+    random_seed=None):
     """
     Main function to run pyFoXS
     """
-    # np.random.seed(42)
+    if random_seed is not None:
+        np.random.seed(random_seed)
 
     heavy_atoms_only = not hydrogens
     residue_level = residues
@@ -214,6 +216,7 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
 
     # 2. compute profiles for input pdbs
     profiles = []
+    fit_profiles = []
     fps = []
     prs = []
 
@@ -261,17 +264,17 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
             fp = FitParameters()
             if score_log:
                 pf = ProfileFitter(exp_saxs_profile, scoring_function=ChiScoreLog())
-                fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
+                fp, fit_profile = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                     use_offset, fit_file_name2)
             else:
                 if vr_score:
                     pf = ProfileFitter(exp_saxs_profile, scoring_function=RatioVolatilityScore())
-                    fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
+                    fp, fit_profile = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                 else:
                     # default path
                     pf = ProfileFitter(exp_saxs_profile) # scoring_function=ChiScore() by default
-                    fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
+                    fp, fit_profile = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
                                         use_offset, fit_file_name2)
                     if chi_free > 0:
                         dmax = compute_max_distance(particles_vec[i])
@@ -282,8 +285,10 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
                                                     delta=exp_saxs_profile.delta_q_, constructor=0)
 
                         pf.resample(profile, resampled_profile)
-                        chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile, use_offset)
+                        chi_free, fit_profile = cfs.compute_score(exp_saxs_profile, resampled_profile, use_offset)
                         fp.chi_square = chi_free
+
+            fit_profiles.append(fit_profile)
 
             fp.pdb_file_name = pdb_files[i]
             fp.profile_file_name = dat_file
@@ -293,4 +298,4 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
 
     fps.sort(key=lambda x: x.chi_square)
 
-    return profiles, fps, prs
+    return profiles, fit_profiles, fps, prs
