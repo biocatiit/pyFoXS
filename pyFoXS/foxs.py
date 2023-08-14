@@ -8,17 +8,17 @@ import sys
 import argparse
 import numpy as np
 
-from src import __version__
-from src.utils.utils import compute_profile, read_files, trim_extension
-from src.utils.Profile import Profile
-from src.utils.ProfileFitter import ProfileFitter
-from src.score.ChiScoreLog import ChiScoreLog
-from src.score.ChiFreeScore import ChiFreeScore
-from src.score.RatioVolatilityScore import RatioVolatilityScore
-from src.utils.FitParameters import FitParameters
-from src.utils.Distribution import RadialDistributionFunction
-from src.structure.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
-from src.structure.Atom import compute_max_distance
+from pyfoxs import __version__
+from pyfoxs.utils.utils import compute_profile, read_files, trim_extension
+from pyfoxs.utils.Profile import Profile
+from pyfoxs.utils.ProfileFitter import ProfileFitter
+from pyfoxs.score.ChiScoreLog import ChiScoreLog
+from pyfoxs.score.ChiFreeScore import ChiFreeScore
+from pyfoxs.score.RatioVolatilityScore import RatioVolatilityScore
+from pyfoxs.utils.FitParameters import FitParameters
+from pyfoxs.utils.Distribution import RadialDistributionFunction
+from pyfoxs.structure.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
+from pyfoxs.structure.Atom import compute_max_distance
 
 def main():
     """
