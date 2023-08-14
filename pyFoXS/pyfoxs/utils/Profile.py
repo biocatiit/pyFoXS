@@ -18,7 +18,8 @@ IMP_SAXS_DELTA_LIMIT = 1.0e-15
 class Profile:
     modulation_function_parameter_ = 0.23
 
-    def __init__(self, qmin=0, qmax=0, delta=1, file_name="", fit_file=True, max_q=0, units=1, constructor=0):
+    def __init__(self, qmin=0, qmax=0, delta=1, file_name="", fit_file=True,
+        max_q=0, units=1, constructor=0):
         if constructor == 0:
             self.min_q_ = qmin
             self.max_q_ = qmax

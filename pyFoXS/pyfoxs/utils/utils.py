@@ -48,7 +48,8 @@ def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_lay
 
     return profile
 
-def read_files(m, files, pdb_file_names, dat_files, particles_vec, exp_profiles, residue_level, heavy_atoms_only, multi_model_pdb, explicit_water, max_q, units):
+def read_files(m, files, pdb_file_names, dat_files, particles_vec, exp_profiles,
+    residue_level, heavy_atoms_only, multi_model_pdb, explicit_water, max_q, units):
     for file in files:
         # check if file exists
         if not os.path.exists(file):
@@ -69,7 +70,8 @@ def read_files(m, files, pdb_file_names, dat_files, particles_vec, exp_profiles,
                 exp_profiles.append(profile)
                 print("Profile read from file " + file + " size = " + str(profile.size()))
 
-def read_pdb(model, file, pdb_file_names, particles_vec, residue_level, heavy_atoms_only, multi_model_pdb, explicit_water):
+def read_pdb(model, file, pdb_file_names, particles_vec, residue_level,
+    heavy_atoms_only, multi_model_pdb, explicit_water):
     mhds = []
     selector = None
     if residue_level:
