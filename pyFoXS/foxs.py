@@ -9,22 +9,23 @@ import argparse
 import numpy as np
 
 from pyfoxs import __version__
-from pyfoxs.utils.utils import compute_profile, read_files, trim_extension
-from pyfoxs.utils.Profile import Profile
-from pyfoxs.utils.ProfileFitter import ProfileFitter
-from pyfoxs.score.ChiScoreLog import ChiScoreLog
-from pyfoxs.score.ChiFreeScore import ChiFreeScore
-from pyfoxs.score.RatioVolatilityScore import RatioVolatilityScore
-from pyfoxs.utils.FitParameters import FitParameters
-from pyfoxs.utils.Distribution import RadialDistributionFunction
-from pyfoxs.structure.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
-from pyfoxs.structure.Atom import compute_max_distance
+# from pyfoxs.utils.utils import compute_profile, read_files, trim_extension
+# from pyfoxs.utils.Profile import Profile
+# from pyfoxs.utils.ProfileFitter import ProfileFitter
+# from pyfoxs.score.ChiScoreLog import ChiScoreLog
+# from pyfoxs.score.ChiFreeScore import ChiFreeScore
+# from pyfoxs.score.RatioVolatilityScore import RatioVolatilityScore
+# from pyfoxs.utils.FitParameters import FitParameters
+# from pyfoxs.utils.Distribution import RadialDistributionFunction
+# from pyfoxs.structure.FormFactorTable import get_default_form_factor_table, FormFactorTable, FormFactorType
+# from pyfoxs.structure.Atom import compute_max_distance
+from pyfoxs import pyfoxs_api
 
 def main():
     """
     Main function to run pyFoXS in the terminal
     """
-    np.random.seed(42)
+    # np.random.seed(42)
     profile_size = 500
     max_q = 0.5 # change after read
     min_c1 = 0.99
@@ -89,11 +90,7 @@ def main():
       "\nAny number of input PDBs and profiles is supported.\n"
       "Each PDB will be fitted against each profile.\n\n"
       "This program is part of IMP, the Integrative Modeling Platform.\n")
-
-    fit = True
     files = []
-    pdb_files = []
-    dat_files = []
 
     if args.input_files:
         files = args.input_files
@@ -123,7 +120,6 @@ def main():
     # no water layer or fitting in ab initio mode for now
     if args.ab_initio:
         ab_initio = True
-        fit = False
 
     if args.vacuum:
         vacuum = True
@@ -146,136 +142,149 @@ def main():
     multi_model_pdb = args.multi_model_pdb
     units = args.units
 
-    if multi_model_pdb not in (1, 2, 3):
-        print(f"Incorrect option for multi_model_pdb {multi_model_pdb}")
-        print("Use 1 to read first MODEL only")
-        print("    2 to read each MODEL into a separate structure,")
-        print("    3 to read all models into a single structure")
-        print("Default value of 1 is used")
-        multi_model_pdb = 1
+    hydrogens = not heavy_atoms_only
 
-    if units not in (1, 2, 3):
-        print(f"Incorrect option for units {units}")
-        print("Use 1 for unknown units, 2 for 1/A, 3 for 1/nm")
-        print("Default value of 1 is used")
-        units = 1
+    pyfoxs_api.pyfoxs(files, profile_size=profile_size, max_q=max_q,
+        min_c1=min_c1, max_c1=max_c1, min_c2=min_c2, max_c2=max_c2,
+        hydrogens=hydrogens, residues=residue_level,
+        background_adjustment_q=background_adjustment_q, use_offset=use_offset,
+        write_partial_profile=write_partial_profile,
+        multi_model_pdb=multi_model_pdb, units=units, vr_score=vr_score,
+        score_log=score_log, explicit_water=explicit_water,
+        form_factor_table_file=form_factor_table_file,
+        beam_profile_file=beam_profile_file, ab_initio=ab_initio,
+        vacuum=vacuum, chi_free=chi_free, pr_dmax=pr_dmax, write_output=True)
 
-    # determine form factor type
-    ff_type = FormFactorType.HEAVY_ATOMS
+    # if multi_model_pdb not in (1, 2, 3):
+    #     print(f"Incorrect option for multi_model_pdb {multi_model_pdb}")
+    #     print("Use 1 to read first MODEL only")
+    #     print("    2 to read each MODEL into a separate structure,")
+    #     print("    3 to read all models into a single structure")
+    #     print("Default value of 1 is used")
+    #     multi_model_pdb = 1
 
-    if not heavy_atoms_only:
-        ff_type = FormFactorType.ALL_ATOMS
+    # if units not in (1, 2, 3):
+    #     print(f"Incorrect option for units {units}")
+    #     print("Use 1 for unknown units, 2 for 1/A, 3 for 1/nm")
+    #     print("Default value of 1 is used")
+    #     units = 1
 
-    if residue_level:
-        ff_type = FormFactorType.CA_ATOMS
+    # # determine form factor type
+    # ff_type = FormFactorType.HEAVY_ATOMS
 
-    # 1. read pdbs and profiles, prepare particles
-    particles_vec = []
-    exp_profiles = []
-    m = None # Model()
+    # if not heavy_atoms_only:
+    #     ff_type = FormFactorType.ALL_ATOMS
 
-    read_files(m, files, pdb_files, dat_files, particles_vec, exp_profiles,
-            residue_level, heavy_atoms_only, multi_model_pdb, explicit_water,
-            max_q, units)
+    # if residue_level:
+    #     ff_type = FormFactorType.CA_ATOMS
 
-    if background_adjustment_q > 0.0:
-        for profile in exp_profiles:
-            profile.background_adjust(background_adjustment_q)
+    # # 1. read pdbs and profiles, prepare particles
+    # particles_vec = []
+    # exp_profiles = []
+    # m = None # Model()
 
-    if len(exp_profiles) == 0 and not write_partial_profile:
-        fit = False
+    # read_files(m, files, pdb_files, dat_files, particles_vec, exp_profiles,
+    #         residue_level, heavy_atoms_only, multi_model_pdb, explicit_water,
+    #         max_q, units)
 
-    if max_q == 0.0:
-        if len(exp_profiles) > 0:
-            for profile in exp_profiles:
-                if profile.max_q_ > max_q:
-                    max_q = profile.max_q_
-        else:
-            max_q = 0.5
+    # if background_adjustment_q > 0.0:
+    #     for profile in exp_profiles:
+    #         profile.background_adjust(background_adjustment_q)
 
-    delta_q = max_q / profile_size
+    # if len(exp_profiles) == 0 and not write_partial_profile:
+    #     fit = False
 
-    # read in or use default form factor table
-    reciprocal = False
-    ft = None
+    # if max_q == 0.0:
+    #     if len(exp_profiles) > 0:
+    #         for profile in exp_profiles:
+    #             if profile.max_q_ > max_q:
+    #                 max_q = profile.max_q_
+    #     else:
+    #         max_q = 0.5
 
-    if len(form_factor_table_file) > 0:
-        # reciprocal space calculation, requires form factor file
-        ft = FormFactorTable(form_factor_table_file, 0.0, max_q, delta_q)
-        reciprocal = True
-    else:
-        ft = get_default_form_factor_table()
+    # delta_q = max_q / profile_size
 
-    # 2. compute profiles for input pdbs
-    profiles = []
-    fps = []
+    # # read in or use default form factor table
+    # reciprocal = False
+    # ft = None
 
-    for i, part in enumerate(particles_vec):
-        print("Computing profile for", pdb_files[i], len(part), "atoms")
-        profile = compute_profile(part, 0.0, max_q, delta_q, ft, ff_type,
-                                not explicit_water, fit, reciprocal, ab_initio, vacuum,
-                                beam_profile_file)
+    # if len(form_factor_table_file) > 0:
+    #     # reciprocal space calculation, requires form factor file
+    #     ft = FormFactorTable(form_factor_table_file, 0.0, max_q, delta_q)
+    #     reciprocal = True
+    # else:
+    #     ft = get_default_form_factor_table()
 
-        # save the profile
-        profiles.append(profile)
-        # write profile file
-        profile_file_name = pdb_files[i] + ".dat"
-        if write_partial_profile:
-            profile.write_partial_profiles(profile_file_name)
-        else:  # write normal profile
-            profile.add_errors()
-            profile.write_SAXS_file(profile_file_name)
+    # # 2. compute profiles for input pdbs
+    # profiles = []
+    # fps = []
 
-        # calculate P(r)
-        if pr_dmax > 0.0:
-            pr = RadialDistributionFunction(0.5)
-            profile.profile_2_distribution(pr, pr_dmax)
-            pr.normalize()
-            pr_file_name = pdb_files[i] + ".pr"
-            with open(pr_file_name, "w") as pr_file:
-                pr_file.write("Distance distribution\n")
-                for item in pr.distribution:
-                    pr_file.write(str(item)+"\n")
+    # for i, part in enumerate(particles_vec):
+    #     print("Computing profile for", pdb_files[i], len(part), "atoms")
+    #     profile = compute_profile(part, 0.0, max_q, delta_q, ft, ff_type,
+    #                             not explicit_water, fit, reciprocal, ab_initio, vacuum,
+    #                             beam_profile_file)
 
-        # 3. fit experimental profiles
-        for j, dat_file in enumerate(dat_files):
-            exp_saxs_profile = exp_profiles[j]
-            fit_file_name2 = trim_extension(pdb_files[i]) + "_" + \
-                trim_extension(os.path.basename(dat_file)) + ".dat"
-            fp = FitParameters()
-            if score_log:
-                pf = ProfileFitter(exp_saxs_profile, scoring_function=ChiScoreLog())
-                fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
-                                    use_offset, fit_file_name2)
-            else:
-                if vr_score:
-                    pf = ProfileFitter(exp_saxs_profile, scoring_function=RatioVolatilityScore())
-                    fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
-                                        use_offset, fit_file_name2)
-                else:
-                    # default path
-                    pf = ProfileFitter(exp_saxs_profile) # scoring_function=ChiScore() by default
-                    fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
-                                        use_offset, fit_file_name2)
-                    if chi_free > 0:
-                        dmax = compute_max_distance(particles_vec[i])
-                        ns = int(round(exp_saxs_profile.max_q_ * dmax / np.pi))
-                        K = chi_free
-                        cfs = ChiFreeScore(K, ns)
-                        resampled_profile = Profile(qmin=exp_saxs_profile.min_q_, qmax=exp_saxs_profile.max_q_,
-                                                    delta=exp_saxs_profile.delta_q_, constructor=0)
+    #     # save the profile
+    #     profiles.append(profile)
+    #     # write profile file
+    #     profile_file_name = pdb_files[i] + ".dat"
+    #     if write_partial_profile:
+    #         profile.write_partial_profiles(profile_file_name)
+    #     else:  # write normal profile
+    #         profile.add_errors()
+    #         profile.write_SAXS_file(profile_file_name)
 
-                        pf.resample(profile, resampled_profile)
-                        chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile, use_offset)
-                        fp.chi_square = chi_free
-            fp.pdb_file_name = pdb_files[i]
-            fp.profile_file_name = dat_file
-            fp.mol_index = i
-            fp.show(sys.stdout)
-            fps.append(fp)
+    #     # calculate P(r)
+    #     if pr_dmax > 0.0:
+    #         pr = RadialDistributionFunction(0.5)
+    #         profile.profile_2_distribution(pr, pr_dmax)
+    #         pr.normalize()
+    #         pr_file_name = pdb_files[i] + ".pr"
+    #         with open(pr_file_name, "w") as pr_file:
+    #             pr_file.write("Distance distribution\n")
+    #             for item in pr.distribution:
+    #                 pr_file.write(str(item)+"\n")
 
-    fps.sort(key=lambda x: x.chi_square)
-    return
+    #     # 3. fit experimental profiles
+    #     for j, dat_file in enumerate(dat_files):
+    #         exp_saxs_profile = exp_profiles[j]
+    #         fit_file_name2 = trim_extension(pdb_files[i]) + "_" + \
+    #             trim_extension(os.path.basename(dat_file)) + ".dat"
+    #         fp = FitParameters()
+    #         if score_log:
+    #             pf = ProfileFitter(exp_saxs_profile, scoring_function=ChiScoreLog())
+    #             fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
+    #                                 use_offset, fit_file_name2)
+    #         else:
+    #             if vr_score:
+    #                 pf = ProfileFitter(exp_saxs_profile, scoring_function=RatioVolatilityScore())
+    #                 fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
+    #                                     use_offset, fit_file_name2)
+    #             else:
+    #                 # default path
+    #                 pf = ProfileFitter(exp_saxs_profile) # scoring_function=ChiScore() by default
+    #                 fp = pf.fit_profile(profile, min_c1, max_c1, min_c2, max_c2,
+    #                                     use_offset, fit_file_name2)
+    #                 if chi_free > 0:
+    #                     dmax = compute_max_distance(particles_vec[i])
+    #                     ns = int(round(exp_saxs_profile.max_q_ * dmax / np.pi))
+    #                     K = chi_free
+    #                     cfs = ChiFreeScore(K, ns)
+    #                     resampled_profile = Profile(qmin=exp_saxs_profile.min_q_, qmax=exp_saxs_profile.max_q_,
+    #                                                 delta=exp_saxs_profile.delta_q_, constructor=0)
+
+    #                     pf.resample(profile, resampled_profile)
+    #                     chi_free = cfs.compute_score(exp_saxs_profile, resampled_profile, use_offset)
+    #                     fp.chi_square = chi_free
+    #         fp.pdb_file_name = pdb_files[i]
+    #         fp.profile_file_name = dat_file
+    #         fp.mol_index = i
+    #         fp.show(sys.stdout)
+    #         fps.append(fp)
+
+    # fps.sort(key=lambda x: x.chi_square)
+    # return
 
 if __name__ == "__main__":
     main()
