@@ -42,7 +42,7 @@ def test_exp_data_lys_pdb():
 
     assert np.allclose(comp_prof.q_, calc_prof.q_)
     assert np.allclose(comp_prof.intensity_, calc_prof.intensity_)
-    assert np.isclose(0.20220989389435595, fit_params.chi_square)
-    assert np.isclose(1.0113119999999998, fit_params.c1)
+    assert np.isclose(0.20223330806401435, fit_params.chi_square)
+    assert np.isclose(1.0109279999999998, fit_params.c1)
     assert np.isclose(0.5871999999999999, fit_params.c2)
 

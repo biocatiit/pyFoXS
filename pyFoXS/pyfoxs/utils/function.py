@@ -39,8 +39,9 @@ class ExpFunction:
         self.max_value_ = max_value
 
     def exp(self, x):
-        index = value2index(self.one_over_bin_size_, abs(x))
-        y = index * self.bin_size_
+        # index = value2index(self.one_over_bin_size_, abs(x))
+        # y = index * self.bin_size_
+        y = abs(x)
         if x < 0.0:
             return 1.0 / math.exp(y)
         return math.exp(y)

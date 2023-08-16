@@ -24,6 +24,28 @@ class ChiScore:
         if use_offset:
             delta += offset
 
+        chi_square = np.sum(np.square(delta/errors))
+
+        chi_square /= profile_size
+        return chi_square
+
+    def old_compute_score(self, exp_profile, model_profile, use_offset):
+        offset = 0.0
+        if use_offset:
+            offset = self.compute_offset(exp_profile, model_profile)
+        c = self.compute_scale_factor(exp_profile, model_profile, offset)
+
+        chi_square = 0.0
+        profile_size = min(model_profile.size(), exp_profile.size())
+
+        errors = exp_profile.error_
+        exp_intensities = exp_profile.intensity_
+        model_intensities = model_profile.intensity_
+
+        delta = exp_intensities - c * model_intensities
+        if use_offset:
+            delta += offset
+
         for i, d in enumerate(delta):
             # Exclude the uncertainty originated from limitation of floating number
             if np.fabs(d / exp_intensities[i]) >= 1.0e-15:

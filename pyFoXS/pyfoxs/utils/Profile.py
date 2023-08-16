@@ -39,6 +39,7 @@ class Profile:
         self.name_ = file_name
         self.q_mapping_ = {}
         self.beam_profile_ = None
+        self.partial_profiles_ = []
         # self.init()
 
     def init(self, size=0, partial_profiles_size=0):
@@ -57,8 +58,9 @@ class Profile:
             for i in range(number_of_q_entries):
                 self.q_[i] = self.min_q_ + i * self.delta_q_
 
-        if partial_profiles_size > 0 and not hasattr(self, "partial_profiles_"):
-            self.partial_profiles_ = [np.zeros(number_of_q_entries, dtype=np.double) for _ in range(partial_profiles_size)]
+        if partial_profiles_size > 0 and len(self.partial_profiles_) == 0:
+            self.partial_profiles_ = [np.zeros(number_of_q_entries,
+                dtype=np.double) for _ in range(partial_profiles_size)]
 
     def find_max_q(self, file_name):
         with open(file_name, 'r') as in_file:
@@ -369,6 +371,70 @@ class Profile:
 
     def calculate_profile_partial(self, particles, surface, ff_type):
         print("start real partial profile calculation for {} particles\n".format(len(particles)))
+        coordinates = np.array([particle.coordinates for particle in particles])
+        vacuum_ff = np.array([self.ff_table_.get_vacuum_form_factor(particle,
+            ff_type) for particle in particles])
+        dummy_ff = np.array([self.ff_table_.get_dummy_form_factor(particle,
+            ff_type) for particle in particles])
+
+        r_size = 3
+
+        if len(surface) == len(particles):
+            r_size = 6
+            water_ff = np.array([surface[i]*self.ff_table_.get_water_form_factor()
+                for i in range(len(particles))])
+
+        r_dist = [RadialDistributionFunction() for _ in range(r_size)]
+
+        # iterate over pairs of atoms
+        max_idx = len(coordinates)
+        dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
+        prod_full = [np.empty(int(np.ceil(max_idx*(max_idx-1)))) for _ in range(r_size)]
+        start_idx = 0
+
+        for i in range(max_idx):
+            dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
+            dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
+
+            prod1 = 2*vacuum_ff[i+1:]*vacuum_ff[i] # constant
+            prod2 = 2*dummy_ff[i+1:]*dummy_ff[i] # c1^2
+            prod3 = 2*(vacuum_ff[i+1:]*dummy_ff[i] + dummy_ff[i+1:]*vacuum_ff[i]) # -c1
+
+            prod_full[0][start_idx:start_idx+(max_idx-(i+1))] = prod1
+            prod_full[1][start_idx:start_idx+(max_idx-(i+1))] = prod2
+            prod_full[2][start_idx:start_idx+(max_idx-(i+1))] = prod3
+
+            if r_size > 3:
+                prod4 = 2*water_ff[i+1:]*water_ff[i] # c2^2
+                prod5 = 2*(vacuum_ff[i+1:]*water_ff[i] + water_ff[i+1:]*vacuum_ff[i]) # c2
+                prod6 = 2*(dummy_ff[i+1:]*water_ff[i] + water_ff[i+1:]*dummy_ff[i]) # -c1*c2
+
+                prod_full[3][start_idx:start_idx+(max_idx-(i+1))] = prod4
+                prod_full[4][start_idx:start_idx+(max_idx-(i+1))] = prod5
+                prod_full[5][start_idx:start_idx+(max_idx-(i+1))] = prod6
+
+            start_idx += max_idx-(i+1)
+
+        for i, d in enumerate(r_dist):
+            d.add_to_distribution_many(dist_full, prod_full[i])
+
+        r_dist[0].add_to_distribution(0.0, np.sum(np.square(vacuum_ff)))
+        r_dist[1].add_to_distribution(0.0, np.sum(np.square(dummy_ff)))
+        r_dist[2].add_to_distribution(0.0, 2*np.sum(vacuum_ff*dummy_ff))
+
+        if r_size > 3:
+            r_dist[3].add_to_distribution(0.0, np.sum(np.square(water_ff)))
+            r_dist[4].add_to_distribution(0.0, 2*np.sum(water_ff*vacuum_ff))
+            r_dist[5].add_to_distribution(0.0, 2*np.sum(water_ff*dummy_ff))
+
+        # convert to reciprocal space
+        self.squared_distributions_2_partial_profiles(r_dist)
+
+        # compute default profile c1 = 1, c2 = 0
+        self.sum_partial_profiles(1.0, 0.0, False)
+
+    def old_calculate_profile_partial(self, particles, surface, ff_type):
+        print("start real partial profile calculation for {} particles\n".format(len(particles)))
         coordinates = [particle.coordinates for particle in particles]
         vacuum_ff = [self.ff_table_.get_vacuum_form_factor(particle, ff_type) for particle in particles]
         dummy_ff = [self.ff_table_.get_dummy_form_factor(particle, ff_type) for particle in particles]
@@ -414,6 +480,43 @@ class Profile:
 
     def sum_partial_profiles(self, c1, c2, check_cached=False):
         # precomputed exp function
+        # ef = ExpFunction(self.max_q_ * self.max_q_ * 0.3, 0.00001)
+
+        if len(self.partial_profiles_) == 0:
+            return
+
+        # check if the profiles are already summed by this c1/c2 combination
+        if check_cached and abs(self.c1_ - c1) <= 0.000001 and abs(self.c2_ - c2) <= 0.000001:
+            return
+
+        rm = self.average_radius_
+        coefficient = -rm * rm * (c1 * c1 - 1.0) / (4 * math.pi)
+        square_c2 = c2 * c2
+        cube_c1 = c1 * c1 * c1
+
+        self.intensity_ = self.partial_profiles_[0].copy()
+
+        if len(self.partial_profiles_) > 3:
+            self.intensity_ += square_c2 * self.partial_profiles_[3]
+            self.intensity_ += c2 * self.partial_profiles_[4]
+
+        x = coefficient*np.square(self.q_)
+        x_idx = np.fabs(x) > 1.0e-8
+        G_q = np.full_like(x, cube_c1)
+        G_q[x_idx] *= np.exp(x[x_idx])
+
+        self.intensity_ += G_q * G_q * self.partial_profiles_[1]
+        self.intensity_ -= G_q * self.partial_profiles_[2]
+
+        if len(self.partial_profiles_) > 3:
+            self.intensity_ -= G_q * c2 * self.partial_profiles_[5]
+
+        # cache new c1/c2 values
+        self.c1_ = c1
+        self.c2_ = c2
+
+    def old_sum_partial_profiles(self, c1, c2, check_cached=False):
+        # precomputed exp function
         ef = ExpFunction(self.max_q_ * self.max_q_ * 0.3, 0.00001)
 
         if not hasattr(self, "partial_profiles_") or len(self.partial_profiles_) == 0:
@@ -451,7 +554,24 @@ class Profile:
         self.c1_ = c1
         self.c2_ = c2
 
+
     def resample(self, exp_profile, resampled_profile):
+        resampled_profile.init(exp_profile.size(), len(self.partial_profiles_))
+
+        q_rs = resampled_profile.q_
+        intensity_rs = resampled_profile.intensity_
+        pp_rs = resampled_profile.partial_profiles_
+
+        q_rs, intensity_rs, pp_rs = inner_resample(q_rs, intensity_rs, np.array(pp_rs),
+            exp_profile.q_, self.q_, self.intensity_, self.max_q_, self.name_,
+            np.array(self.partial_profiles_))
+
+        resampled_profile.q_ = q_rs
+        resampled_profile.intensity_ = intensity_rs
+        resampled_profile.partial_profiles_ = [pp_rs[i] for i in range(len(pp_rs))]
+        # resampled_profile.partial_profiles_ = pp_rs
+
+    def old_resample(self, exp_profile, resampled_profile):
         if not self.q_mapping_:
             for k in range(self.size()):
                 self.q_mapping_[self.q_[k]] = k
@@ -461,7 +581,7 @@ class Profile:
 
         for k in range(exp_profile.size()):
             q = exp_profile.q_[k]
-            q_mapping_iterator = next((it for it in self.q_mapping_.items() if it[0] >= q), None)            
+            q_mapping_iterator = next((it for it in self.q_mapping_.items() if it[0] >= q), None)
             # In case the experimental profile is longer than the computed one
             if q > self.max_q_ or q_mapping_iterator is None:
                 print("Profile " + self.name_ + " is not sampled for q = " + str(q) +
@@ -472,6 +592,7 @@ class Profile:
 
             i = q_mapping_iterator[1]
             delta_q = 1.0
+
             if i == 0 or (delta_q := self.q_[i] - self.q_[i - 1]) <= 1.0e-16:
                 if hasattr(self, "partial_profiles_") and len(self.partial_profiles_) > 0:
                     for r, pp in enumerate(self.partial_profiles_):
@@ -618,6 +739,28 @@ class Profile:
         r_size = len(r_dist)
         self.init(self.size(), r_size) # reset=False
 
+        distances = np.sqrt(np.arange(r_dist[0].size())*r_dist[0].bin_size)
+
+        use_beam_profile = False
+        if self.beam_profile_ is not None and self.beam_profile_.size() > 0:
+            use_beam_profile = True
+
+        for k in range(self.size()):
+            x = np.sinc(distances*self.q_[k]/np.pi)
+
+            for i in range(r_size):
+                intensity_k = np.sum(r_dist[i].distribution*x)
+                self.partial_profiles_[i][k] += intensity_k
+
+        corr = np.exp(-self.modulation_function_parameter_*np.square(self.q_))
+
+        for i in range(r_size):
+            self.partial_profiles_[i] *= corr
+
+    def old_squared_distributions_2_partial_profiles(self, r_dist):
+        r_size = len(r_dist)
+        self.init(self.size(), r_size) # reset=False
+
         sf = SincFunction(math.sqrt(r_dist[0].max_distance_) * self.max_q_, 0.0001)
         distances = np.zeros(r_dist[0].size())
         non_zero_indices = np.where(r_dist[0].distribution > 0.0)[0]
@@ -630,7 +773,7 @@ class Profile:
             for r in range(r_dist[0].size()):
                 if r_dist[0].distribution[r] > 0.0:
                     dist = distances[r]
-                    
+
                     if use_beam_profile:
                         x1 = dist * np.sqrt(f*f + self.beam_profile_.q_**2)
                         x = np.sum(2 * self.beam_profile_.intensity_ * sf.sinc(x1))
@@ -794,3 +937,56 @@ def _inner_squared_distribution_2_profile(distances, distribution, qk,
             intensity_k += distribution[r] * x
 
     return intensity_k
+
+@jit(nopython=True, cache=True)
+def inner_resample(q_rs, intensity_rs, pp_rs, exp_q, q_, intensity_, max_q_,
+    name_, pp_):
+    # Initialize
+    size_pp = len(pp_)
+    size_q = len(q_)
+
+    next_q_idx = 0
+
+    for k in range(len(exp_q)):
+        q = exp_q[k]
+
+        found_next = False
+        while not found_next:
+            if q_[next_q_idx] >= q:
+                found_next = True
+            elif next_q_idx ==  size_q -1:
+                break
+            else:
+                next_q_idx += 1
+
+        # In case the experimental profile is longer than the computed one
+        if q > max_q_ or not found_next:
+            print("Profile " + name_ + " is not sampled for q = " + str(q) +
+                    ", q_max = " + str(max_q_) +
+                    "\nYou can remove points with q > " + str(max_q_) +
+                    " from the experimental profile or recompute the profile with higher max_q")
+            return
+
+        i = next_q_idx
+        delta_q = q_[i] - q_[i - 1]
+
+        if i == 0 or delta_q <= 1.0e-16:
+            if size_pp > 0:
+                for r, pp in enumerate(pp_):
+                    pp_rs[r][k] = pp[i]
+            q_rs[k] = q
+            intensity_rs[k] = intensity_[i]
+        else:
+            # Interpolate
+            alpha = (q - q_[i - 1]) / delta_q
+            alpha = min(alpha, 1.0) # Handle rounding errors
+            if size_pp > 0:
+                for r, pp in enumerate(pp_):
+                    intensity = (1 - alpha) * pp[i - 1] + alpha * pp[i]
+                    pp_rs[r][k] = intensity
+            intensity = (1 - alpha) * intensity_[i - 1] + alpha * intensity_[i]
+            q_rs[k] = q
+            intensity_rs[k] = intensity
+
+    return q_rs, intensity_rs, pp_rs
+

@@ -25,7 +25,8 @@ class ProfileFitter:
     def resample(self, model_profile, resampled_profile):
         model_profile.resample(self.exp_profile_, resampled_profile)
 
-    def search_fit_parameters(self, partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, old_chi):
+    def search_fit_parameters(self, partial_profile, min_c1, max_c1, min_c2,
+        max_c2, use_offset, old_chi):
         c1_cells = 10
         c2_cells = 10
         if old_chi < float('inf') - 1:  # second iteration
@@ -70,7 +71,8 @@ class ProfileFitter:
             max_c1 = min(best_c1 + delta_c1, max_c1)
             min_c2 = max(best_c2 - delta_c2, min_c2)
             max_c2 = min(best_c2 + delta_c2, max_c2)
-            return self.search_fit_parameters(partial_profile, min_c1, max_c1, min_c2, max_c2, use_offset, best_chi)
+            return self.search_fit_parameters(partial_profile, min_c1, max_c1,
+                min_c2, max_c2, use_offset, best_chi)
         return FitParameters(best_chi, best_c1, best_c2)
 
     def fit_profile(self, partial_profile, min_c1, max_c1, min_c2, max_c2,
@@ -92,6 +94,33 @@ class ProfileFitter:
         return fp, fit_profile
 
     def compute_score(self, model_profile, use_offset, fit_file_name=""):
+        resampled_profile = Profile(
+            qmin=self.exp_profile_.min_q_,
+            qmax=self.exp_profile_.max_q_,
+            delta=self.exp_profile_.delta_q_,
+            constructor=0
+        )
+        # model_profile and resampled_profile might be different than the C++ version
+        model_profile.resample(self.exp_profile_, resampled_profile)
+        score = self.scoring_function_.compute_score(self.exp_profile_,
+            resampled_profile, use_offset)
+
+        offset = 0.0
+        if use_offset:
+            offset = self.scoring_function_.compute_offset(self.exp_profile_,
+                resampled_profile)
+        c = self.scoring_function_.compute_scale_factor(self.exp_profile_,
+            resampled_profile, offset)
+
+        if len(fit_file_name) > 0:
+            self.write_SAXS_fit_file(fit_file_name, resampled_profile, score,
+                c, offset)
+
+        resampled_profile.intensity_ = resampled_profile.intensity_ * c - offset
+
+        return score, resampled_profile
+
+    def old_compute_score(self, model_profile, use_offset, fit_file_name=""):
         resampled_profile = Profile(
             qmin=self.exp_profile_.min_q_,
             qmax=self.exp_profile_.max_q_,
