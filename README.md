@@ -11,12 +11,13 @@ The python version is still in development, so use with caution!
 
 ## Install and run
 
-First, you need to install the scipy and numpy library:
-```
-pip install scipy numpy
-```
+Depends on:
 
-You can then run the foxs.py file like a normal python file:
+*   numpy
+*   scipy
+*   numba
+
+Once you install dependencies you can run the foxs.py file like a normal python file:
 ```
 python foxs.py examples/nup133/3KFO.pdb examples/nup133/23922_merge.dat
 ```

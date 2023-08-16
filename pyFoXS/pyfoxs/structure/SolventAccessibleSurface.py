@@ -7,11 +7,10 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 import math
 import numpy as np
 from scipy import spatial
-from numba import jit
+from numba import jit, prange
 
 class SolventAccessibleSurface:
     def __init__(self):
-        self.radii2type = None
         self.sphere_dots = None
 
     def compute_accessibility(self, point, probe_radius, density):
@@ -24,6 +23,48 @@ class SolventAccessibleSurface:
         return accessibility
 
     def get_solvent_accessibility(self, ps, probe_radius=1.8, density=5.0):
+        res = []
+        coordinates = np.array([p.coordinates for p in ps])
+        radii = np.array([p.radius for p in ps])
+
+        # generate sphere dots for radii present in the ps set
+        self.create_sphere_dots(ps, density)
+
+        # init grid
+        grid = spatial.KDTree(coordinates)
+
+        # res2 = []
+
+        # compute surface
+        max_radius = 3.0
+        for i in range(len(ps)):
+            atom_radius = radii[i]
+            radius = atom_radius + 2 * probe_radius + max_radius
+
+            inside_rad = np.array(grid.query_ball_point(coordinates[i], radius),
+                dtype=np.int_)
+            # inside_rad = np.setdiff1d(inside_rad, i)
+
+            radius_sum1 = atom_radius + radii[inside_rad]
+            radius_sum2 = radius_sum1+2*probe_radius
+            dist2 = np.sum(np.square(coordinates[inside_rad]-coordinates[i]),axis=1)
+
+            neighbours1 = inside_rad[dist2<np.square(radius_sum1)]
+            neighbours2 = inside_rad[dist2<np.square(radius_sum2)]
+
+
+            spoints = self.sphere_dots[atom_radius]
+
+            dotNum = inner_get_solvent_accessibilty(spoints, radii,
+                coordinates[i], coordinates, neighbours1, neighbours2,
+                probe_radius, atom_radius)
+
+            res.append(float(dotNum) / len(spoints))
+
+
+        return res
+
+    def old_get_solvent_accessibility(self, ps, probe_radius=1.8, density=5.0):
         res = []
         coordinates = np.array([p.coordinates for p in ps])
         radii = np.array([p.radius for p in ps])
@@ -90,25 +131,18 @@ class SolventAccessibleSurface:
         return nearest_index
 
     def create_sphere_dots(self, ps, density):
-        radii2type = {}
-        sphere_dots = []
+        sphere_dots = {}
 
         for p in ps:
             r = p.radius # [3] # radius in XYZR
-            if r not in radii2type:
-                type_ = len(radii2type)
-                radii2type[r] = type_
+            if r not in sphere_dots:
                 dots = self.create_sphere_dots_for_radius(r, density)
-                sphere_dots.append(dots)
+                sphere_dots[r] = np.array(dots)
 
-        self.radii2type = radii2type
         self.sphere_dots = sphere_dots
 
     def get_sphere_dots(self, r):
-        if r not in self.radii2type:
-            raise ValueError(f"SolventAccessibleSurface: can't find sphere dots for radius {r}")
-        index = self.radii2type[r]
-        return self.sphere_dots[index]
+        return self.sphere_dots[r]
 
     def create_sphere_dots_for_radius(self, radius, density):
         res = []
@@ -127,19 +161,52 @@ class SolventAccessibleSurface:
                 res.append((radius * x, radius * y, radius * z))
         return res
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def get_squared_distance(v1, v2):
     squared_dist = 0.0
     for i in range(3):
         squared_dist += (v1[i] - v2[i]) ** 2
     return squared_dist
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def is_intersecting(center1, center2, radius1, radius2):
     squared_radius_sum = (radius1 + radius2) * (radius1 + radius2)
     squared_dist = get_squared_distance(center1, center2)
-    if abs(squared_radius_sum - squared_dist) < 0.0001:
-        return False
-    if squared_radius_sum > squared_dist:
+
+    if squared_radius_sum - squared_dist > 0.0001:
         return True
+
     return False
+
+@jit(nopython=True, cache=True)
+def inner_get_solvent_accessibilty(spoints, radii, current_coord, coordinates,
+    neighbours1, neighbours2, probe_radius, atom_radius):
+    ratio = (atom_radius + probe_radius) / atom_radius
+    dotNum = 0
+    tot_points = len(spoints)
+    tot_n1 = len(neighbours1)
+    tot_n2 = len(neighbours2)
+
+    for s_index in range(tot_points):
+        probe_center = current_coord + ratio * spoints[s_index]
+        # check for intersection with neighbors1
+        collides = False
+        for n_index in range(tot_n1):
+            n1 = neighbours1[n_index]
+            if is_intersecting(probe_center, coordinates[n1], probe_radius,
+                radii[n1]):
+                collides = True
+                break
+
+        if not collides: # check for intersection with neighbors2
+            for n_index in range(tot_n2):
+                n2 = neighbours2[n_index]
+                if is_intersecting(probe_center, coordinates[n2], probe_radius,
+                    radii[n2]):
+                    collides = True
+                    break
+
+        if not collides:
+            dotNum += 1
+
+    return dotNum

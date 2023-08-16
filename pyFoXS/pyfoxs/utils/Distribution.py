@@ -8,10 +8,12 @@ Copyright 2007-2022 IMP Inventors. All rights reserved.
 
 import numpy as np
 from numba import jit
+import scipy as sp
 
 class RadialDistributionFunction(object):
     def __init__(self, bin_size=0.5):
         self.bin_size = bin_size
+        self.one_over_bin_size = 1/self.bin_size
         self.distribution = np.array([0.0])
         self.max_distance_ = 50.0
 
@@ -37,13 +39,43 @@ class RadialDistributionFunction(object):
             self.max_distance_ = get_distance_from_index(self.bin_size, index + 1)
         self.distribution[index] += value
 
+    def add_to_distribution_many(self, dists, values):
+        if len(dists) > 0:
+            dist_bins = np.round(dists*self.one_over_bin_size).astype(np.int_)
+
+            # if dist_bins.max() > self.distribution.shape[0]:
+            #     ext = np.zeros(int(dist_bins.max())-self.distribution.shape[0]+1)
+            #     self.distribution = np.concatenate((self.distribution, ext))
+
+            # new_bins = np.arange(0, self.distribution.shape[0]+1)
+            # res = sp.stats.binned_statistic(dist_bins, values, 'sum', bins=new_bins)
+            # self.distribution += res.statistic
+
+            # self.max_distance = self.bin_size*(self.distribution.shape[0]+1)
+
+            self.distribution =  inner_add_to_distribution_many(dist_bins, dists,
+                values, self.distribution)
+
+            self.max_distance = self.bin_size*(self.distribution.shape[0]+1)
+
     def size(self):
         return self.distribution.shape[0]
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def get_index_from_distance(bin_size, dist):
         return round(dist * 1/bin_size)
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def get_distance_from_index(bin_size, index):
     return index * bin_size
+
+@jit(nopython=True, cache=True)
+def inner_add_to_distribution_many(dist_bins, dists, values, distribution):
+    if dist_bins.max() > distribution.shape[0]:
+        ext = np.zeros(int(dist_bins.max())-distribution.shape[0]+1)
+        distribution = np.concatenate((distribution, ext))
+
+        for i, index in enumerate(dist_bins):
+            distribution[index] += values[i]
+
+    return distribution

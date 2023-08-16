@@ -47,18 +47,18 @@ class Profile:
             number_of_q_entries = int(np.ceil((self.max_q_ - self.min_q_) / self.delta_q_)) + 1
 
         if not hasattr(self, "q_"):
-            self.q_ = np.zeros(number_of_q_entries, dtype=np.float32)
+            self.q_ = np.zeros(number_of_q_entries, dtype=np.double)
         if not hasattr(self, "intensity_"):
-            self.intensity_ = np.zeros(number_of_q_entries, dtype=np.float32)
+            self.intensity_ = np.zeros(number_of_q_entries, dtype=np.double)
         if not hasattr(self, "error_"):
-            self.error_ = np.zeros(number_of_q_entries, dtype=np.float32)
+            self.error_ = np.zeros(number_of_q_entries, dtype=np.double)
 
         if size == 0:
             for i in range(number_of_q_entries):
                 self.q_[i] = self.min_q_ + i * self.delta_q_
 
         if partial_profiles_size > 0 and not hasattr(self, "partial_profiles_"):
-            self.partial_profiles_ = [np.zeros(number_of_q_entries, dtype=np.float32) for _ in range(partial_profiles_size)]
+            self.partial_profiles_ = [np.zeros(number_of_q_entries, dtype=np.double) for _ in range(partial_profiles_size)]
 
     def find_max_q(self, file_name):
         with open(file_name, 'r') as in_file:
@@ -302,6 +302,33 @@ class Profile:
     def calculate_profile_real(self, particles, ff_type):
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()  # fi(0) fj(0)
+        coordinates = np.array([particle.coordinates for particle in particles])
+        form_factors = np.array([self.ff_table_.get_form_factor(particle, ff_type) for particle in particles])
+
+        # iterate over pairs of atoms
+        max_idx = len(coordinates)
+        dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
+        prod_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
+        start_idx = 0
+
+        for i in range(max_idx):
+            dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
+            prods = 2*form_factors[i+1:]*form_factors[i]
+
+            dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
+            prod_full[start_idx:start_idx+(max_idx-(i+1))] = prods
+
+            start_idx += max_idx-(i+1)
+
+        r_dist.add_to_distribution_many(dist_full, prod_full)
+        r_dist.add_to_distribution(0.0, np.sum(np.square(form_factors)))
+
+
+        self.squared_distribution_2_profile(r_dist)
+
+    def old_calculate_profile_real(self, particles, ff_type):
+        print("start real profile calculation for {} particles\n".format(len(particles)))
+        r_dist = RadialDistributionFunction()  # fi(0) fj(0)
         coordinates = [particle.coordinates for particle in particles]
         form_factors = [self.ff_table_.get_form_factor(particle, ff_type) for particle in particles]
 
@@ -534,6 +561,32 @@ class Profile:
 
     def squared_distribution_2_profile(self, r_dist):
         self.init()
+
+        distances = np.sqrt(np.arange(r_dist.size())*r_dist.bin_size)
+
+        use_beam_profile = False
+        if self.beam_profile_ is not None and len(self.beam_profile_) > 0:
+            use_beam_profile = True
+
+        # # Iterate over intensity profile
+        for k in range(self.size()):
+            x = np.sinc(distances*self.q_[k]/np.pi)
+
+            intensity_k = np.sum(r_dist.distribution*x)
+
+            self.intensity_[k] = intensity_k
+
+        # For whatever reason, the for loop is faster than the fully vectorized version
+        # inn_x = np.multiply.outer(self.q_, distances)
+        # x = np.sinc(inn_x/np.pi)
+        # intensity = np.sum(x*r_dist.distribution, axis=1)
+        # self.intensity_ = intensity
+
+        # Correction for the form factor approximation
+        self.intensity_ *= np.exp(-self.modulation_function_parameter_*np.square(self.q_))
+
+    def old_squared_distribution_2_profile(self, r_dist):
+        self.init()
         # Precomputed sin(x)/x function
         sf = SincFunction(
             math.sqrt(r_dist.max_distance_) * self.max_q_, 0.0001)
@@ -701,7 +754,7 @@ class Profile:
     def size(self):
         return len(self.q_) if hasattr(self, "q_") else 0
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def get_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -712,7 +765,7 @@ def get_distance(vector1, vector2):
 
     return dist
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def get_squared_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -723,7 +776,7 @@ def get_squared_distance(vector1, vector2):
 
     return squared_dist
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def _inner_squared_distribution_2_profile(distances, distribution, qk,
     one_over_bin_size, bin_size):
     intensity_k = 0.0

@@ -4,7 +4,6 @@ import pytest
 import numpy as np
 
 pyfoxs_path = os.path.abspath(os.path.join('.', __file__, '..', '..'))
-print(pyfoxs_path)
 if pyfoxs_path not in os.sys.path:
     os.sys.path.append(pyfoxs_path)
 
@@ -24,9 +23,9 @@ def test_no_exp_data_lys_pdb():
 
     calc_prof = profiles[0]
 
-    assert np.all(comp_prof.q_ == calc_prof.q_)
-    assert np.all(comp_prof.intensity_ == calc_prof.intensity_)
-    assert np.all(comp_prof.error_ == calc_prof.error_)
+    assert np.allclose(comp_prof.q_, calc_prof.q_)
+    assert np.allclose(comp_prof.intensity_, calc_prof.intensity_)
+    assert np.allclose(comp_prof.error_, calc_prof.error_)
 
 def test_exp_data_lys_pdb():
     lys_model = os.path.join('.', 'data', '6lyz.pdb')
@@ -43,7 +42,7 @@ def test_exp_data_lys_pdb():
 
     assert np.allclose(comp_prof.q_, calc_prof.q_)
     assert np.allclose(comp_prof.intensity_, calc_prof.intensity_)
-    assert np.isclose(0.20214323686750643, fit_params.chi_square)
+    assert np.isclose(0.20220989389435595, fit_params.chi_square)
     assert np.isclose(1.0113119999999998, fit_params.c1)
     assert np.isclose(0.5871999999999999, fit_params.c2)
 

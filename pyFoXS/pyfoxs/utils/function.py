@@ -14,18 +14,18 @@ class SincFunction(object):
         # WARNING: this function might create a difference with the C++ code (precision difference)
         return sinc_pi(x, self.one_over_bin_size_, self.bin_size_)
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def sinc(x, one_over_bin_size, bin_size):
     return sinc_pi(x, one_over_bin_size, bin_size)
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def value2index(one_over_bin_size_, value):
     return int(value * one_over_bin_size_ + 0.5)
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def sinc_pi(x, one_over_bin_size_, bin_size_):
-    index = value2index(one_over_bin_size_, x)
-    x = index * bin_size_
+    # index = value2index(one_over_bin_size_, x)
+    # x = index * bin_size_
     if abs(x) >= 3.3 * fourth_eps:
         return math.sin(x)/x
     else:

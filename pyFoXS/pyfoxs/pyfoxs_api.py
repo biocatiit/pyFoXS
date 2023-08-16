@@ -37,122 +37,19 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
 
     heavy_atoms_only = not hydrogens
     residue_level = residues
-    # background_adjustment_q = 0.0
-    # use_offset = False
-    # write_partial_profile = False
-    # multi_model_pdb = 1
-    # units = 1 # determine automatically
-    # vr_score = False
-    # score_log = False
-    # gnuplot_script = False
-    # explicit_water = False
-    # desc_prefix = ""
-    # form_factor_table_file = ""
-    # beam_profile_file = ""
-    # ab_initio = False
-    # vacuum = False
-    # chi_free = 0
-    # pr_dmax = 0.0
 
-    # hidden = argparse.ArgumentParser(add_help=False)
-    # hidden.add_argument("input_files", nargs="*", help="input PDB and profile files")
-    # hidden.add_argument("--form_factor_table", "-f", help="ff table name", default=form_factor_table_file)
-    # hidden.add_argument("--explicit_water", help="use waters from input PDB (default = False)", action="store_true")
-    # hidden.add_argument("--beam_profile", help="beam profile file name for desmearing", default=beam_profile_file)
-    # hidden.add_argument("--ab_initio", help="compute profile for a bead model with constant form factor (default = False)", action="store_true")
-    # hidden.add_argument("--vacuum", help="compute profile in vacuum (default = False)", action="store_true")
-    # hidden.add_argument("--chi_free", help="compute chi-free instead of chi, specify iteration number (default = 0)", type=int, default=chi_free)
-    # hidden.add_argument("--pr_dmax", help="Dmax value for P(r) calculation. P(r) is calculated only if pr_dmax > 0", type=float, default=pr_dmax)
-
-    # parser = argparse.ArgumentParser(description=desc_prefix + ".\n\nOptions", parents=[hidden])
-    # parser.add_argument("--version", help="Show version info and exit.", action="store_true")
-    # parser.add_argument("--profile_size", "-s", help="number of points in the profile", type=int, default=profile_size)
-    # parser.add_argument("--max_q", "-q", help="max q value", type=float, default=max_q)
-    # parser.add_argument("--min_c1", help="min c1 value", type=float, default=min_c1)
-    # parser.add_argument("--max_c1", help="max c1 value", type=float, default=max_c1)
-    # parser.add_argument("--min_c2", help="min c2 value", type=float, default=min_c2)
-    # parser.add_argument("--max_c2", help="max c2 value", type=float, default=max_c2)
-    # parser.add_argument("--hydrogens", "-hyd", help="explicitly consider hydrogens in PDB files (default = False)", action="store_true")
-    # parser.add_argument("--residues", "-r", help="fast coarse grained calculation using CA atoms only (default = False)", action="store_true")
-    # parser.add_argument("--background_q", "-b", help="background adjustment, not used by default. if enabled, recommended q value is 0.2", type=float, default=background_adjustment_q)
-    # parser.add_argument("--offset", "-o", help="use offset in fitting (default = False)", action="store_true")
-    # parser.add_argument("--write-partial-profile", "-p", help="write partial profile file (default = False)", action="store_true")
-    # parser.add_argument("--multi-model-pdb", "-m", help="1 - read the first MODEL only (default), 2 - read each MODEL into a separate structure, 3 - read all models into a single structure", type=int, default=multi_model_pdb)
-    # parser.add_argument("--units", "-u", help="1 - unknown --> determine automatically (default) 2 - q values are in 1/A, 3 - q values are in 1/nm", type=int, default=units)
-    # parser.add_argument("--volatility_ratio", "-v", help="calculate volatility ratio score (default = False)", action="store_true")
-    # parser.add_argument("--score_log", "-l", help="use log(intensity) in fitting and scoring (default = False)", action="store_true")
-    # parser.add_argument("--gnuplot_script", "-g", help="print gnuplot script for gnuplot viewing (default = False)", action="store_true")
-
-    # args = parser.parse_args()
-
-    # if args.version:
-    #     print(f"pyFoXS Version: {__version__}")
-    #     return
-
-    # print("Usage: <pdb_file1> <pdb_file2> ... <profile_file1> <profile_file2> ...\n"
-    #   "\nAny number of input PDBs and profiles is supported.\n"
-    #   "Each PDB will be fitted against each profile.\n\n"
-    #   "This program is part of IMP, the Integrative Modeling Platform.\n")
 
     if not ab_initio:
         fit = True
     else:
         fit = False
 
-    # files = []
     pdb_files = []
     dat_files = []
-
-    # if args.input_files:
-    #     files = args.input_files
 
     if not files:
         print("WARNING: You need to specify a file to the program.\n")
         return
-
-    # if args.hydrogens:
-    #     heavy_atoms_only = False
-
-    # if args.residues:
-    #     residue_level = True
-
-    # if args.offset:
-    #     use_offset = True
-
-    # if args.write_partial_profile:
-    #     write_partial_profile = True
-
-    # if args.score_log:
-    #     score_log = True
-
-    # if args.explicit_water:
-    #     explicit_water = True
-
-    # # no water layer or fitting in ab initio mode for now
-    # if args.ab_initio:
-    #     ab_initio = True
-    #     fit = False
-
-    # if args.vacuum:
-    #     vacuum = True
-
-    # if args.volatility_ratio:
-    #     vr_score = True
-
-    # form_factor_table_file = args.form_factor_table
-    # beam_profile_file = args.beam_profile
-    # chi_free = args.chi_free
-    # pr_dmax = args.pr_dmax
-
-    # profile_size = args.profile_size
-    # max_q = args.max_q
-    # min_c1 = args.min_c1
-    # max_c1 = args.max_c1
-    # min_c2 = args.min_c2
-    # max_c2 = args.max_c2
-    # background_adjustment_q = args.background_q
-    # multi_model_pdb = args.multi_model_pdb
-    # units = args.units
 
     if multi_model_pdb not in (1, 2, 3):
         print(f"Incorrect option for multi_model_pdb {multi_model_pdb}")
