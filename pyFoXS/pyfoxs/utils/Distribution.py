@@ -41,7 +41,7 @@ class RadialDistributionFunction(object):
 
     def add_to_distribution_many(self, dists, values):
         if len(dists) > 0:
-            dist_bins = np.round(dists*self.one_over_bin_size).astype(np.int_)
+            # dist_bins = np.round(dists*self.one_over_bin_size)
 
             # if dist_bins.max() > self.distribution.shape[0]:
             #     ext = np.zeros(int(dist_bins.max())-self.distribution.shape[0]+1)
@@ -53,8 +53,8 @@ class RadialDistributionFunction(object):
 
             # self.max_distance = self.bin_size*(self.distribution.shape[0]+1)
 
-            self.distribution =  inner_add_to_distribution_many(dist_bins, dists,
-                values, self.distribution)
+            self.distribution =  inner_add_to_distribution_many(dists,
+                values, self.distribution, self.one_over_bin_size)
 
             self.max_distance = self.bin_size*(self.distribution.shape[0]+1)
 
@@ -70,12 +70,13 @@ def get_distance_from_index(bin_size, index):
     return index * bin_size
 
 @jit(nopython=True, cache=True)
-def inner_add_to_distribution_many(dist_bins, dists, values, distribution):
-    if dist_bins.max() > distribution.shape[0]:
-        ext = np.zeros(int(dist_bins.max())-distribution.shape[0]+1)
+def inner_add_to_distribution_many(dists, values, distribution, one_over_bin_size):
+    max_val = int(dists.max()*one_over_bin_size+0.5)
+    if max_val > distribution.shape[0]:
+        ext = np.zeros(max_val-distribution.shape[0]+1)
         distribution = np.concatenate((distribution, ext))
 
-        for i, index in enumerate(dist_bins):
-            distribution[index] += values[i]
+    for i in range(len((dists))):
+        distribution[int(dists[i]*one_over_bin_size+0.5)] += values[i]
 
     return distribution

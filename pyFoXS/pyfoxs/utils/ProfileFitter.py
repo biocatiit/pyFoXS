@@ -112,11 +112,11 @@ class ProfileFitter:
         c = self.scoring_function_.compute_scale_factor(self.exp_profile_,
             resampled_profile, offset)
 
+        resampled_profile.intensity_ = resampled_profile.intensity_ * c - offset
+
         if len(fit_file_name) > 0:
             self.write_SAXS_fit_file(fit_file_name, resampled_profile, score,
                 c, offset)
-
-        resampled_profile.intensity_ = resampled_profile.intensity_ * c - offset
 
         return score, resampled_profile
 
@@ -139,12 +139,13 @@ class ProfileFitter:
         c = self.scoring_function_.compute_scale_factor(self.exp_profile_,
             resampled_profile, offset)
 
+        for i in range(resampled_profile.size()):
+            resampled_profile.intensity_[i] = resampled_profile.intensity_[i]* c - offset
+
         if len(fit_file_name) > 0:
             self.write_SAXS_fit_file(fit_file_name, resampled_profile, score,
                 c, offset)
 
-        for i in range(resampled_profile.size()):
-            resampled_profile.intensity_[i] = resampled_profile.intensity_[i]* c - offset
         return score, resampled_profile
 
     def write_SAXS_fit_file(self, file_name, model_profile, score, c, offset):
@@ -165,7 +166,7 @@ class ProfileFitter:
             for i in range(profile_size):
                 out_file.write("{:<10.8f} ".format(self.exp_profile_.q_[i]))
                 out_file.write("{:<15.8f} ".format(self.exp_profile_.intensity_[i]))
-                out_file.write("{:<15.8f} ".format(model_profile.intensity_[i] * c - offset))
+                out_file.write("{:<15.8f} ".format(model_profile.intensity_[i]))
                 out_file.write("{:<10.8f}\n".format(self.exp_profile_.error_[i]))
 
         # Write to the second file with .fit extension
@@ -187,4 +188,4 @@ class ProfileFitter:
                 out_file2.write("{:<10.8f} ".format(self.exp_profile_.q_[i]))
                 out_file2.write("{:<15.8f} ".format(self.exp_profile_.intensity_[i]))
                 out_file2.write("{:<10.8f} ".format(self.exp_profile_.error_[i]))
-                out_file2.write("{:<15.8f}\n".format(model_profile.intensity_[i] * c - offset))
+                out_file2.write("{:<15.8f}\n".format(model_profile.intensity_[i]))

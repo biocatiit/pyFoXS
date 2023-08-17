@@ -40,24 +40,14 @@ class SolventAccessibleSurface:
         for i in range(len(ps)):
             atom_radius = radii[i]
             radius = atom_radius + 2 * probe_radius + max_radius
+            spoints = self.sphere_dots[atom_radius]
 
             inside_rad = np.array(grid.query_ball_point(coordinates[i], radius),
                 dtype=np.int_)
             # inside_rad = np.setdiff1d(inside_rad, i)
 
-            radius_sum1 = atom_radius + radii[inside_rad]
-            radius_sum2 = radius_sum1+2*probe_radius
-            dist2 = np.sum(np.square(coordinates[inside_rad]-coordinates[i]),axis=1)
-
-            neighbours1 = inside_rad[dist2<np.square(radius_sum1)]
-            neighbours2 = inside_rad[dist2<np.square(radius_sum2)]
-
-
-            spoints = self.sphere_dots[atom_radius]
-
-            dotNum = inner_get_solvent_accessibilty(spoints, radii,
-                coordinates[i], coordinates, neighbours1, neighbours2,
-                probe_radius, atom_radius)
+            dotNum = inner_get_solvent_accessibilty(inside_rad, spoints, radii,
+                coordinates[i], coordinates, probe_radius, atom_radius)
 
             res.append(float(dotNum) / len(spoints))
 
@@ -179,8 +169,16 @@ def is_intersecting(center1, center2, radius1, radius2):
     return False
 
 @jit(nopython=True, cache=True)
-def inner_get_solvent_accessibilty(spoints, radii, current_coord, coordinates,
-    neighbours1, neighbours2, probe_radius, atom_radius):
+def inner_get_solvent_accessibilty(inside_rad, spoints, radii, current_coord, coordinates,
+    probe_radius, atom_radius):
+
+    radius_sum1 = atom_radius + radii[inside_rad]
+    radius_sum2 = radius_sum1+2*probe_radius
+    dist2 = np.sum(np.square(coordinates[inside_rad]-current_coord),axis=1)
+
+    neighbours1 = inside_rad[dist2<np.square(radius_sum1)]
+    neighbours2 = inside_rad[dist2<np.square(radius_sum2)]
+
     ratio = (atom_radius + probe_radius) / atom_radius
     dotNum = 0
     tot_points = len(spoints)

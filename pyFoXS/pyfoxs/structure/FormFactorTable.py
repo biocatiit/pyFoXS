@@ -447,11 +447,13 @@ class FormFactorTable:
 
         # DNA/RNA atoms
         # C5'
-        if atom_type == "C5p":
+        if atom_type == "C5p" or atom_type == "C5'":
             return self.FormFactorAtomType.CH2
         # C1', C2', C3', C4'
         if (atom_type == "C4p" or atom_type == "C3p" or
-                atom_type == "C2p" or atom_type == "C1p"):
+            atom_type == "C2p" or atom_type == "C1p"
+            or atom_type == "C4'" or atom_type == "C3'"
+            or atom_type == "C2'" or atom_type == "C1'"):
             return self.FormFactorAtomType.CH
         # C2
         if atom_type == "C2":
@@ -574,13 +576,15 @@ class FormFactorTable:
 
         # DNA/RNA atoms
         # O1P, O3', O2P, O2',O4',05', O2,O4,O6
-        if atom_type == "OP1" or atom_type == "O3p "or \
-                atom_type == "OP2" or atom_type == "O4p" or \
-                atom_type == "O5p" or atom_type == "O2" or \
-                atom_type == "O4" or atom_type == "O6":
+        if (atom_type == "OP1" or atom_type == "O3p "or
+            atom_type == "OP2" or atom_type == "O4p" or
+            atom_type == "O5p" or atom_type == "O2" or
+            atom_type == "O4" or atom_type == "O6"
+            or atom_type == "O3'" or atom_type == "O4'"
+            or atom_type == "O5'"):
             return self.FormFactorAtomType.O
         # O2'
-        if atom_type == "O2p":
+        if atom_type == "O2p" or atom_type =="O2'":
             return self.FormFactorAtomType.OH
 
         # water molecule

@@ -46,8 +46,7 @@ class ResidueType(IntEnum):
     HEME = 35
     POP = 36
 
-def get_residue_type(code):
-    residue_types = {
+residue_types = {
         "UNK": ResidueType.UNK,
         "GLY": ResidueType.GLY,
         "ALA": ResidueType.ALA,
@@ -82,14 +81,24 @@ def get_residue_type(code):
         "DCYT": ResidueType.DCYT,
         "DGUA": ResidueType.DGUA,
         "DTHY": ResidueType.DTHY,
+        "A" : ResidueType.ADE,
+        "U" : ResidueType.URA,
+        "C" : ResidueType.CYT,
+        "G" : ResidueType.GUA,
+        "T" : ResidueType.THY,
+        "DA": ResidueType.DADE,
+        "DU": ResidueType.DURA,
+        "DC": ResidueType.DCYT,
+        "DG": ResidueType.DGUA,
+        "DT": ResidueType.DTHY,
         "HOH": ResidueType.HOH,
         "HEME": ResidueType.HEME,
         "POP": ResidueType.POP
     }
+def get_residue_type(code):
     return residue_types[code]
 
-def residue_to_string(code):
-    residue_types = {
+residue_string_types = {
         ResidueType.UNK : "UNK",
         ResidueType.GLY : "GLY",
         ResidueType.ALA : "ALA",
@@ -128,10 +137,10 @@ def residue_to_string(code):
         ResidueType.HEME : "HEME",
         ResidueType.POP : "POP"
     }
-    return residue_types[code]
+def residue_to_string(code):
+    return residue_string_types[code]
 
-def get_one_letter_code(residue_type):
-    one_letter_codes = {
+one_letter_codes = {
         ResidueType.UNK: "X",
         ResidueType.GLY: "G",
         ResidueType.ALA: "A",
@@ -170,10 +179,11 @@ def get_one_letter_code(residue_type):
         ResidueType.HEME: "HEME",
         ResidueType.POP: "POP"
     }
+
+def get_one_letter_code(residue_type):
     return one_letter_codes.get(residue_type)
 
-def get_mass(residue_type):
-    residue_masses = {
+residue_masses = {
         ResidueType.ALA: 71.079,
         ResidueType.ARG: 156.188,
         ResidueType.ASP: 115.089,
@@ -205,6 +215,8 @@ def get_mass(residue_type):
         ResidueType.DGUA: 507.2,
         ResidueType.POP: 686.97
     }
+
+def get_mass(residue_type):
     return residue_masses.get(residue_type, math.nan)
 
 class Residue:
@@ -228,7 +240,13 @@ class Residue:
         if isinstance(value, ResidueType):
             self._residue_type = value
         elif isinstance(value, str):
-            self._residue_type = ResidueType[value]
+            try:
+                self._residue_type = get_residue_type(value)
+            except KeyError:
+                residue_types[value] = value
+                residue_string_types[value] = value
+                self._residue_type = get_residue_type(value)
+
         else:
             raise ValueError("Invalid residue type.")
 

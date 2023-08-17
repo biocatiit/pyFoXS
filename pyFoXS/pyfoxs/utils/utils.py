@@ -11,7 +11,8 @@ from ..structure.SolventAccessibleSurface import SolventAccessibleSurface
 from ..structure.Residue import Residue
 from ..structure.Atom import Atom, Chain, get_atom_type_exists, add_atom_type
 
-def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type, hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file):
+def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type,
+    hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file):
     profile = Profile(qmin=min_q, qmax=max_q, delta=delta_q, constructor=0)
     # profile = Profile(min_q, max_q, delta_q)
     if reciprocal:
@@ -57,10 +58,12 @@ def read_files(m, files, pdb_file_names, dat_files, particles_vec, exp_profiles,
             return
         # 1. try as pdb or mmcif
         try:
-            read_pdb(m, file, pdb_file_names, particles_vec, residue_level, heavy_atoms_only, multi_model_pdb, explicit_water)
+            read_pdb(m, file, pdb_file_names, particles_vec, residue_level,
+                heavy_atoms_only, multi_model_pdb, explicit_water)
         except ValueError:  # not a pdb file
             # 2. try as a dat profile file
-            profile = Profile(file_name=file, fit_file=False, max_q=max_q, units=units, constructor=1)
+            profile = Profile(file_name=file, fit_file=False, max_q=max_q,
+                units=units, constructor=1)
             # profile = Profile(file, False, max_q, units)
             if profile.size() == 0:
                 print("Can't parse input file " + file)
@@ -114,13 +117,16 @@ def read_pdb(model, file, pdb_file_names, particles_vec, residue_level,
                 print(str(len(ps)) + " atoms were read from PDB file " + file)
     return pdb_file_names, particles_vec
 
-def read_pdb_or_mmcif(in_text, model, selector=get_default_pdb_selector(), select_first_model=True, noradii=False):
+def read_pdb_or_mmcif(in_text, model, selector=get_default_pdb_selector(),
+    select_first_model=True, noradii=False):
     if in_text.endswith(".cif"):
         return read_mmcif(in_text, model, selector, select_first_model, noradii)
     else:
-        return read_pdb_hierarchy(in_text, model, selector, select_first_model, noradii)
+        return read_pdb_hierarchy(in_text, model, selector, select_first_model,
+            noradii)
 
-def read_multimodel_pdb_or_mmcif(in_text, model, selector=get_default_pdb_selector(), noradii=False):
+def read_multimodel_pdb_or_mmcif(in_text, model,
+    selector=get_default_pdb_selector(), noradii=False):
     if in_text.endswith('.cif'):
         return read_multimodel_mmcif(in_text, model, selector, noradii)
     else:
@@ -181,7 +187,8 @@ def read_multimodel_pdb(in_stream, model, selector, noradii):
 def read_pdb_hierarchy(in_text, model, selector, select_first_model, no_radii):
     fname = os.path.split(in_text)[1]
     nicename = os.path.splitext(fname)[0]
-    ret = read_pdb_func(in_text, nicename, fname, model, selector, select_first_model, False, no_radii)
+    ret = read_pdb_func(in_text, nicename, fname, model, selector,
+        select_first_model, False, no_radii)
     if len(ret) == 0:
         raise ValueError("No molecule read from file " + in_text)
     return ret[0]
@@ -253,7 +260,8 @@ def read_pdb_func(in_stream, name, filename, model, selector, select_first_model
                 else:
                     atom_name = string_name
 
-            atom = Atom(name=atom_name, type=atom_type, coord=coordinates, occupancy=occupancy, temp_factor=temp_factor)
+            atom = Atom(name=atom_name, type=atom_type, coord=coordinates,
+                occupancy=occupancy, temp_factor=temp_factor)
 
             # # create atom particle
             # make sure all children have coordinates (no residues without valid atoms)
@@ -272,7 +280,9 @@ def read_pdb_func(in_stream, name, filename, model, selector, select_first_model
                     current_residue = None  # make sure we get a new residue
 
                 # check if new residue
-                if current_residue is None or residue_index != current_residue.index or residue_icode != curr_residue_icode:
+                if (current_residue is None
+                    or residue_index != current_residue.index
+                    or residue_icode != curr_residue_icode):
                     curr_residue_icode = residue_icode
                     # create new residue particle
                     current_residue = Residue(residue_icode, residue_index)

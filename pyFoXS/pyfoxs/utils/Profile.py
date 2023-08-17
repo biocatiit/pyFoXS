@@ -307,20 +307,7 @@ class Profile:
         coordinates = np.array([particle.coordinates for particle in particles])
         form_factors = np.array([self.ff_table_.get_form_factor(particle, ff_type) for particle in particles])
 
-        # iterate over pairs of atoms
-        max_idx = len(coordinates)
-        dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
-        prod_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
-        start_idx = 0
-
-        for i in range(max_idx):
-            dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
-            prods = 2*form_factors[i+1:]*form_factors[i]
-
-            dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
-            prod_full[start_idx:start_idx+(max_idx-(i+1))] = prods
-
-            start_idx += max_idx-(i+1)
+        dist_full, prod_full = inner_calculate_profile_real(coordinates, form_factors)
 
         r_dist.add_to_distribution_many(dist_full, prod_full)
         r_dist.add_to_distribution(0.0, np.sum(np.square(form_factors)))
@@ -386,34 +373,8 @@ class Profile:
 
         r_dist = [RadialDistributionFunction() for _ in range(r_size)]
 
-        # iterate over pairs of atoms
-        max_idx = len(coordinates)
-        dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
-        prod_full = [np.empty(int(np.ceil(max_idx*(max_idx-1)))) for _ in range(r_size)]
-        start_idx = 0
-
-        for i in range(max_idx):
-            dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
-            dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
-
-            prod1 = 2*vacuum_ff[i+1:]*vacuum_ff[i] # constant
-            prod2 = 2*dummy_ff[i+1:]*dummy_ff[i] # c1^2
-            prod3 = 2*(vacuum_ff[i+1:]*dummy_ff[i] + dummy_ff[i+1:]*vacuum_ff[i]) # -c1
-
-            prod_full[0][start_idx:start_idx+(max_idx-(i+1))] = prod1
-            prod_full[1][start_idx:start_idx+(max_idx-(i+1))] = prod2
-            prod_full[2][start_idx:start_idx+(max_idx-(i+1))] = prod3
-
-            if r_size > 3:
-                prod4 = 2*water_ff[i+1:]*water_ff[i] # c2^2
-                prod5 = 2*(vacuum_ff[i+1:]*water_ff[i] + water_ff[i+1:]*vacuum_ff[i]) # c2
-                prod6 = 2*(dummy_ff[i+1:]*water_ff[i] + water_ff[i+1:]*dummy_ff[i]) # -c1*c2
-
-                prod_full[3][start_idx:start_idx+(max_idx-(i+1))] = prod4
-                prod_full[4][start_idx:start_idx+(max_idx-(i+1))] = prod5
-                prod_full[5][start_idx:start_idx+(max_idx-(i+1))] = prod6
-
-            start_idx += max_idx-(i+1)
+        dist_full, prod_full = inner_calculate_profile_partial(coordinates,
+            vacuum_ff, dummy_ff, water_ff, r_size)
 
         for i, d in enumerate(r_dist):
             d.add_to_distribution_many(dist_full, prod_full[i])
@@ -691,10 +652,17 @@ class Profile:
 
         # # Iterate over intensity profile
         for k in range(self.size()):
-            x = np.sinc(distances*self.q_[k]/np.pi)
+            if not use_beam_profile:
+                x = np.sinc(distances*self.q_[k]/np.pi)
+
+            else:
+                # Needs testing
+                x = np.zeros_like(distances)
+                for t in range(self.beam_profile_.size()):
+                    x1 = np.sinc(distances*math.sqrt(self.q_[k]**2+self.beam_profile_.q_[t]**2))
+                    x += 2*self.beam_profile_.intensity_[t]*x1
 
             intensity_k = np.sum(r_dist.distribution*x)
-
             self.intensity_[k] = intensity_k
 
         # For whatever reason, the for loop is faster than the fully vectorized version
@@ -718,18 +686,35 @@ class Profile:
             if r_dist.distribution[r] != 0.0:
                 distances[r] = math.sqrt(get_distance_from_index(r_dist.bin_size, r))
 
-        distances = np.array(distances)
-
         use_beam_profile = False
         if self.beam_profile_ is not None and len(self.beam_profile_) > 0:
             use_beam_profile = True
 
         # Iterate over intensity profile
         for k in range(self.size()):
+            intensity_k = 0.0
 
-            intensity_k = _inner_squared_distribution_2_profile(distances,
-                r_dist.distribution, self.q_[k], sf.one_over_bin_size_,
-                sf.bin_size_)
+            # Iterate over radial distribution
+            for r in range(r_dist.size()):
+                if r_dist.distribution[r] != 0.0:
+                    dist = distances[r]
+                    x = 0.0
+
+                    if use_beam_profile:
+                        # Iterate over beam profile
+                        for t in range(self.beam_profile_.size()):
+                            # x = 2*I(t)*sinc(sqrt(q^2+t^2))
+                            x1 = dist * math.sqrt(self.q_[k]**2 + self.beam_profile_.q_[t]**2)
+                            # s = math.sin(x1)/x1 if x1 != 0 else 1
+                            x += 2 * self.beam_profile_.intensity_[t] * sf.sinc(x1)
+                    else:
+                        # x = sin(dq)/dq
+                        x = dist * self.q_[k]
+                        # x = math.sin(x)/x if x != 0 else 1
+                        x = sf.sinc(x)
+
+                    # Multiply by the value from distribution
+                    intensity_k += r_dist.distribution[r] * x
 
             # Correction for the form factor approximation
             intensity_k *= math.exp(-self.modulation_function_parameter_ * self.q_[k]**2)
@@ -745,8 +730,18 @@ class Profile:
         if self.beam_profile_ is not None and self.beam_profile_.size() > 0:
             use_beam_profile = True
 
+
         for k in range(self.size()):
-            x = np.sinc(distances*self.q_[k]/np.pi)
+
+            if not use_beam_profile:
+                x = np.sinc(distances*self.q_[k]/np.pi)
+
+            else:
+                # Needs testing
+                x = np.zeros_like(distances)
+                for t in range(self.beam_profile_.size()):
+                    x1 = np.sinc(distances*math.sqrt(self.q_[k]**2+self.beam_profile_.q_[t]**2))
+                    x += 2*self.beam_profile_.intensity_[t]*x1
 
             for i in range(r_size):
                 intensity_k = np.sum(r_dist[i].distribution*x)
@@ -897,7 +892,6 @@ class Profile:
     def size(self):
         return len(self.q_) if hasattr(self, "q_") else 0
 
-# @jit(nopython=True)
 def get_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -908,7 +902,6 @@ def get_distance(vector1, vector2):
 
     return dist
 
-# @jit(nopython=True)
 def get_squared_distance(vector1, vector2):
     # Convert the vectors to NumPy arrays
     array1 = np.array(vector1)
@@ -918,25 +911,6 @@ def get_squared_distance(vector1, vector2):
     squared_dist = np.sum((array1 - array2) ** 2)
 
     return squared_dist
-
-# @jit(nopython=True)
-def _inner_squared_distribution_2_profile(distances, distribution, qk,
-    one_over_bin_size, bin_size):
-    intensity_k = 0.0
-
-    # Iterate over radial distribution
-    for r in range(distribution.shape[0]):
-        if distribution[r] != 0.0:
-            dist = distances[r]
-            # x = sin(dq)/dq
-            tx = dist * qk
-            # x = math.sin(x)/x if x != 0 else 1
-            x = sinc(tx, one_over_bin_size, bin_size)
-
-            # Multiply by the value from distribution
-            intensity_k += distribution[r] * x
-
-    return intensity_k
 
 @jit(nopython=True, cache=True)
 def inner_resample(q_rs, intensity_rs, pp_rs, exp_q, q_, intensity_, max_q_,
@@ -990,3 +964,55 @@ def inner_resample(q_rs, intensity_rs, pp_rs, exp_q, q_, intensity_, max_q_,
 
     return q_rs, intensity_rs, pp_rs
 
+@jit(nopython=True, cache=True)
+def inner_calculate_profile_real(coordinates, form_factors):
+    # iterate over pairs of atoms
+    max_idx = len(coordinates)
+    dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
+    prod_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
+    start_idx = 0
+
+    for i in range(max_idx):
+        dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
+        prods = 2*form_factors[i+1:]*form_factors[i]
+
+        dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
+        prod_full[start_idx:start_idx+(max_idx-(i+1))] = prods
+
+        start_idx += max_idx-(i+1)
+
+    return dist_full, prod_full
+
+@jit(nopython=True, cache=True)
+def inner_calculate_profile_partial(coordinates, vacuum_ff, dummy_ff, water_ff,
+    r_size):
+    # iterate over pairs of atoms
+    max_idx = len(coordinates)
+    dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
+    prod_full = [np.empty(int(np.ceil(max_idx*(max_idx-1)))) for _ in range(r_size)]
+    start_idx = 0
+
+    for i in range(max_idx):
+        dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
+        dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
+
+        prod1 = 2*vacuum_ff[i+1:]*vacuum_ff[i] # constant
+        prod2 = 2*dummy_ff[i+1:]*dummy_ff[i] # c1^2
+        prod3 = 2*(vacuum_ff[i+1:]*dummy_ff[i] + dummy_ff[i+1:]*vacuum_ff[i]) # -c1
+
+        prod_full[0][start_idx:start_idx+(max_idx-(i+1))] = prod1
+        prod_full[1][start_idx:start_idx+(max_idx-(i+1))] = prod2
+        prod_full[2][start_idx:start_idx+(max_idx-(i+1))] = prod3
+
+        if r_size > 3:
+            prod4 = 2*water_ff[i+1:]*water_ff[i] # c2^2
+            prod5 = 2*(vacuum_ff[i+1:]*water_ff[i] + water_ff[i+1:]*vacuum_ff[i]) # c2
+            prod6 = 2*(dummy_ff[i+1:]*water_ff[i] + water_ff[i+1:]*dummy_ff[i]) # -c1*c2
+
+            prod_full[3][start_idx:start_idx+(max_idx-(i+1))] = prod4
+            prod_full[4][start_idx:start_idx+(max_idx-(i+1))] = prod5
+            prod_full[5][start_idx:start_idx+(max_idx-(i+1))] = prod6
+
+        start_idx += max_idx-(i+1)
+
+    return dist_full, prod_full
