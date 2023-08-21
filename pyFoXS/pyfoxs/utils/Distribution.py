@@ -61,6 +61,11 @@ class RadialDistributionFunction(object):
     def size(self):
         return self.distribution.shape[0]
 
+    def add_distribution(self, distribution):
+        self.distribution = distribution
+        self.max_distance = self.bin_size*(self.distribution.shape[0]+1)
+
+
 # @jit(nopython=True)
 def get_index_from_distance(bin_size, dist):
         return round(dist * 1/bin_size)

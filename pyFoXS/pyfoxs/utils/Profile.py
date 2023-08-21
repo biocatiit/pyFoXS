@@ -307,11 +307,11 @@ class Profile:
         coordinates = np.array([particle.coordinates for particle in particles])
         form_factors = np.array([self.ff_table_.get_form_factor(particle, ff_type) for particle in particles])
 
-        dist_full, prod_full = inner_calculate_profile_real(coordinates, form_factors)
 
-        r_dist.add_to_distribution_many(dist_full, prod_full)
-        r_dist.add_to_distribution(0.0, np.sum(np.square(form_factors)))
+        distribution = inner_calculate_profile_real(coordinates, form_factors,
+            r_dist.one_over_bin_size)
 
+        r_dist.add_distribution(distribution)
 
         self.squared_distribution_2_profile(r_dist)
 
@@ -373,20 +373,11 @@ class Profile:
 
         r_dist = [RadialDistributionFunction() for _ in range(r_size)]
 
-        dist_full, prod_full = inner_calculate_profile_partial(coordinates,
-            vacuum_ff, dummy_ff, water_ff, r_size)
+        distributions = inner_calculate_profile_partial(coordinates,
+            vacuum_ff, dummy_ff, water_ff, r_size, r_dist[0].one_over_bin_size)
 
         for i, d in enumerate(r_dist):
-            d.add_to_distribution_many(dist_full, prod_full[i])
-
-        r_dist[0].add_to_distribution(0.0, np.sum(np.square(vacuum_ff)))
-        r_dist[1].add_to_distribution(0.0, np.sum(np.square(dummy_ff)))
-        r_dist[2].add_to_distribution(0.0, 2*np.sum(vacuum_ff*dummy_ff))
-
-        if r_size > 3:
-            r_dist[3].add_to_distribution(0.0, np.sum(np.square(water_ff)))
-            r_dist[4].add_to_distribution(0.0, 2*np.sum(water_ff*vacuum_ff))
-            r_dist[5].add_to_distribution(0.0, 2*np.sum(water_ff*dummy_ff))
+            d.add_distribution(distributions[i])
 
         # convert to reciprocal space
         self.squared_distributions_2_partial_profiles(r_dist)
@@ -935,10 +926,12 @@ def inner_resample(q_rs, intensity_rs, pp_rs, exp_q, q_, intensity_, max_q_,
 
         # In case the experimental profile is longer than the computed one
         if q > max_q_ or not found_next:
-            print("Profile " + name_ + " is not sampled for q = " + str(q) +
-                    ", q_max = " + str(max_q_) +
-                    "\nYou can remove points with q > " + str(max_q_) +
-                    " from the experimental profile or recompute the profile with higher max_q")
+            print("The experimental profile is sample to a higher q than the "
+                "set maximum q for the theoretical profile. In order to fit the "
+                "profile, you must either trim the experimental profile to the "
+                "appropriate maximum q value or set the maximum q value of the "
+                "theoretical profile to be generated to be greater than that of "
+                "the experimental profile.")
             return
 
         i = next_q_idx
@@ -964,55 +957,72 @@ def inner_resample(q_rs, intensity_rs, pp_rs, exp_q, q_, intensity_, max_q_,
 
     return q_rs, intensity_rs, pp_rs
 
-@jit(nopython=True, cache=True)
-def inner_calculate_profile_real(coordinates, form_factors):
-    # iterate over pairs of atoms
-    max_idx = len(coordinates)
-    dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
-    prod_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
-    start_idx = 0
 
-    for i in range(max_idx):
+@jit(nopython=True, cache=True)
+def inner_calculate_profile_real(coordinates, form_factors, one_over_bin_size):
+    # iterate over pairs of atoms
+    distribution = np.zeros(1)
+
+    for i in range(len(coordinates)):
         dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
         prods = 2*form_factors[i+1:]*form_factors[i]
 
-        dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
-        prod_full[start_idx:start_idx+(max_idx-(i+1))] = prods
+        if dists.size > 0:
+            max_val = int(dists.max()*one_over_bin_size+0.5)
+            if max_val > distribution.size:
+                ext = np.zeros(max_val-distribution.size+1)
+                distribution = np.concatenate((distribution, ext))
 
-        start_idx += max_idx-(i+1)
+            for k in range(dists.size):
+                distribution[int(dists[k]*one_over_bin_size+0.5)] += prods[k]
 
-    return dist_full, prod_full
+    distribution[0] += np.sum(np.square(form_factors))
+
+    return distribution
 
 @jit(nopython=True, cache=True)
 def inner_calculate_profile_partial(coordinates, vacuum_ff, dummy_ff, water_ff,
-    r_size):
+    r_size, one_over_bin_size):
     # iterate over pairs of atoms
-    max_idx = len(coordinates)
-    dist_full = np.empty(int(np.ceil(max_idx*(max_idx-1))))
-    prod_full = [np.empty(int(np.ceil(max_idx*(max_idx-1)))) for _ in range(r_size)]
-    start_idx = 0
+    distributions = [np.zeros(1) for i in range(r_size)]
 
-    for i in range(max_idx):
+    for i in range(len(coordinates)):
         dists = np.sum(np.square(coordinates[i+1:] - coordinates[i]),axis=1)
-        dist_full[start_idx:start_idx+(max_idx-(i+1))] = dists
 
         prod1 = 2*vacuum_ff[i+1:]*vacuum_ff[i] # constant
         prod2 = 2*dummy_ff[i+1:]*dummy_ff[i] # c1^2
         prod3 = 2*(vacuum_ff[i+1:]*dummy_ff[i] + dummy_ff[i+1:]*vacuum_ff[i]) # -c1
-
-        prod_full[0][start_idx:start_idx+(max_idx-(i+1))] = prod1
-        prod_full[1][start_idx:start_idx+(max_idx-(i+1))] = prod2
-        prod_full[2][start_idx:start_idx+(max_idx-(i+1))] = prod3
 
         if r_size > 3:
             prod4 = 2*water_ff[i+1:]*water_ff[i] # c2^2
             prod5 = 2*(vacuum_ff[i+1:]*water_ff[i] + water_ff[i+1:]*vacuum_ff[i]) # c2
             prod6 = 2*(dummy_ff[i+1:]*water_ff[i] + water_ff[i+1:]*dummy_ff[i]) # -c1*c2
 
-            prod_full[3][start_idx:start_idx+(max_idx-(i+1))] = prod4
-            prod_full[4][start_idx:start_idx+(max_idx-(i+1))] = prod5
-            prod_full[5][start_idx:start_idx+(max_idx-(i+1))] = prod6
+        if dists.size > 0:
+            max_val = int(dists.max()*one_over_bin_size+0.5)
+            if max_val > distributions[0].size:
+                for j in range(r_size):
+                    ext = np.zeros(max_val-distributions[j].size+1)
+                    distributions[j] = np.concatenate((distributions[j], ext))
 
-        start_idx += max_idx-(i+1)
+            for k in range(dists.size):
+                index = int(dists[k]*one_over_bin_size+0.5)
+                distributions[0][index] += prod1[k]
+                distributions[1][index] += prod2[k]
+                distributions[2][index] += prod3[k]
 
-    return dist_full, prod_full
+                if r_size > 3:
+                    distributions[3][index] += prod4[k]
+                    distributions[4][index] += prod5[k]
+                    distributions[5][index] += prod6[k]
+
+    distributions[0][0] += np.sum(np.square(vacuum_ff))
+    distributions[1][0] += np.sum(np.square(dummy_ff))
+    distributions[2][0] += 2*np.sum(vacuum_ff*dummy_ff)
+
+    if r_size > 3:
+        distributions[3][0] += np.sum(np.square(water_ff))
+        distributions[4][0] += 2*np.sum(water_ff*vacuum_ff)
+        distributions[5][0] += 2*np.sum(water_ff*dummy_ff)
+
+    return distributions
