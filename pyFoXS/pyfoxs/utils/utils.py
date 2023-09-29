@@ -12,7 +12,8 @@ from ..structure.Residue import Residue
 from ..structure.Atom import Atom, Chain, get_atom_type_exists, add_atom_type
 
 def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type,
-    hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file):
+    hydration_layer, fit, reciprocal, ab_initio, vacuum, beam_profile_file,
+    gpu=False):
     profile = Profile(qmin=min_q, qmax=max_q, delta=delta_q, constructor=0)
     # profile = Profile(min_q, max_q, delta_q)
     if reciprocal:
@@ -39,7 +40,7 @@ def compute_profile(particles, min_q, max_q, delta_q, ft, ff_type,
             profile.calculate_profile_partial(particles, surface_area, ff_type)
             profile.sum_partial_profiles(0.0, 0.0)
         else:
-            profile.calculate_profile(particles, ff_type, reciprocal)
+            profile.calculate_profile(particles, ff_type, reciprocal, gpu)
     else:
         if reciprocal:
             profile.calculate_profile_reciprocal_partial(particles, surface_area, ff_type)

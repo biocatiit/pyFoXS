@@ -28,7 +28,7 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
     multi_model_pdb=1, units=1, vr_score=False, score_log=False,
     explicit_water=False, form_factor_table_file="", beam_profile_file="",
     ab_initio=False, vacuum=False, chi_free=0, pr_dmax=0.0, write_output=True,
-    random_seed=None):
+    random_seed=None, gpu=False):
     """
     Main function to run pyFoXS
     """
@@ -121,7 +121,7 @@ def pyfoxs(files, profile_size=500, max_q=0.5, min_c1=0.99, max_c1=1.05,
         print("Computing profile for", pdb_files[i], len(part), "atoms")
         profile = compute_profile(part, 0.0, max_q, delta_q, ft, ff_type,
                                 not explicit_water, fit, reciprocal, ab_initio, vacuum,
-                                beam_profile_file)
+                                beam_profile_file, gpu)
 
         # save the profile
         profiles.append(profile)

@@ -8,6 +8,7 @@ import copy
 import math
 import numpy as np
 from numba import jit
+import cupy as cp
 
 from ..structure.FormFactorTable import get_default_form_factor_table, FormFactorType
 from .function import SincFunction, ExpFunction, sinc
@@ -330,6 +331,22 @@ class Profile:
 
             # add autocorrelation part
             r_dist.add_to_distribution(0.0, math.pow(form_factors[i], 2))
+
+        self.squared_distribution_2_profile(r_dist)
+
+    def calculate_profile_real_gpu(self, particles, ff_type):
+        print("start real profile calculation for {} particles\n".format(len(particles)))
+        r_dist = RadialDistributionFunction()  # fi(0) fj(0)
+        coordinates = cp.array([particle.coordinates for particle in particles])
+        form_factors = cp.array([self.ff_table_.get_form_factor(particle, ff_type) for particle in particles])
+
+
+        distribution = inner_calculate_profile_real_gpu(coordinates, form_factors,
+            r_dist.one_over_bin_size)
+
+        distribution = cp.asnumpy(distribution)
+
+        r_dist.add_distribution(distribution)
 
         self.squared_distribution_2_profile(r_dist)
 
@@ -874,9 +891,13 @@ class Profile:
 
         self.sum_partial_profiles(1.0, 0.0, False)
 
-    def calculate_profile(self, particles, ff_type=FormFactorType.HEAVY_ATOMS, reciprocal=False):
+    def calculate_profile(self, particles, ff_type=FormFactorType.HEAVY_ATOMS,
+        reciprocal=False, gpu=False):
         if not reciprocal:
-            self.calculate_profile_real(particles, ff_type)
+            if not gpu:
+                self.calculate_profile_real(particles, ff_type)
+            else:
+                self.calculate_profile_real_gpu(particles, ff_type)
         else:
             self.calculate_profile_reciprocal(particles, ff_type)
 
@@ -1026,3 +1047,25 @@ def inner_calculate_profile_partial(coordinates, vacuum_ff, dummy_ff, water_ff,
         distributions[5][0] += 2*np.sum(water_ff*dummy_ff)
 
     return distributions
+
+
+def inner_calculate_profile_real_gpu(coordinates, form_factors, one_over_bin_size):
+    # iterate over pairs of atoms
+    distribution = cp.zeros(1)
+
+    for i in cp.arange(0, len(coordinates)):
+        dists = cp.sum(cp.square(coordinates[i+1:] - coordinates[i]),axis=1)
+        prods = 2*form_factors[i+1:]*form_factors[i]
+
+        if dists.size > 0:
+            max_val = int(dists.max()*one_over_bin_size+0.5)
+            if max_val > distribution.size:
+                ext = cp.zeros(max_val-distribution.size+1)
+                distribution = cp.concatenate((distribution, ext))
+
+            for k in cp.arange(0, dists.size):
+                distribution[int(dists[k]*one_over_bin_size+0.5)] += prods[k]
+
+    distribution[0] += cp.sum(cp.square(form_factors))
+
+    return distribution
