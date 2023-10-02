@@ -8,7 +8,7 @@ import copy
 import math
 import numpy as np
 from numba import jit
-import cupy as cp
+import torch
 
 from ..structure.FormFactorTable import get_default_form_factor_table, FormFactorType
 from .function import SincFunction, ExpFunction, sinc
@@ -337,14 +337,12 @@ class Profile:
     def calculate_profile_real_gpu(self, particles, ff_type):
         print("start real profile calculation for {} particles\n".format(len(particles)))
         r_dist = RadialDistributionFunction()  # fi(0) fj(0)
-        coordinates = cp.array([particle.coordinates for particle in particles])
-        form_factors = cp.array([self.ff_table_.get_form_factor(particle, ff_type) for particle in particles])
-
+        coordinates = torch.tensor([particle.coordinates for particle in particles])
+        form_factors = torch.tensor([self.ff_table_.get_form_factor(particle, ff_type)
+            for particle in particles])
 
         distribution = inner_calculate_profile_real_gpu(coordinates, form_factors,
             r_dist.one_over_bin_size)
-
-        distribution = cp.asnumpy(distribution)
 
         r_dist.add_distribution(distribution)
 
@@ -1051,21 +1049,91 @@ def inner_calculate_profile_partial(coordinates, vacuum_ff, dummy_ff, water_ff,
 
 def inner_calculate_profile_real_gpu(coordinates, form_factors, one_over_bin_size):
     # iterate over pairs of atoms
-    distribution = cp.zeros(1)
+    # We move our tensor to the GPU if available
+    if torch.cuda.is_available():
+        coordinates = coordinates.to("cuda")
+        form_factors = form_factors.to("cuda")
 
-    for i in cp.arange(0, len(coordinates)):
-        dists = cp.sum(cp.square(coordinates[i+1:] - coordinates[i]),axis=1)
-        prods = 2*form_factors[i+1:]*form_factors[i]
+    # distribution = torch.tensor([torch.sum(torch.square(form_factors))])
+    # if torch.cuda.is_available():
+    #     distribution = distribution.to("cuda")
 
-        if dists.size > 0:
-            max_val = int(dists.max()*one_over_bin_size+0.5)
-            if max_val > distribution.size:
-                ext = cp.zeros(max_val-distribution.size+1)
-                distribution = cp.concatenate((distribution, ext))
+    ff0 = torch.sum(torch.square(form_factors))
+    ff0 = ff0.cpu()
+    ff0 = ff0.numpy()
+    distribution = np.array([ff0])
 
-            for k in cp.arange(0, dists.size):
-                distribution[int(dists[k]*one_over_bin_size+0.5)] += prods[k]
+    for i in range(len(coordinates)):
+        dists = torch.sum(torch.square(coordinates[i+1:] - coordinates[i]),axis=1)
+        prods = torch.multiply(form_factors[i+1:], 2*form_factors[i])
 
-    distribution[0] += cp.sum(cp.square(form_factors))
+        if torch.numel(dists) > 0:
+            dists = dists*one_over_bin_size+0.5
+            dists = dists.to(torch.int32)
+            # dist_cpu = dists.cpu()
+            # prods_cpu = prods.cpu()
+            # dist_cpu = dist_cpu.numpy()
+            # prods_cpu = prods_cpu.numpy()
+            # assign_vals(distribution, dist_cpu, prods_cpu, one_over_bin_size)
+            max_val = dists.max()
+            dist_size = distribution.size
+            if max_val > dist_size:
+
+                # ext = torch.zeros(int(max_val-dist_size+1))
+                # if torch.cuda.is_available():
+                #     ext = ext.to("cuda")
+                # distribution = torch.concatenate((distribution, ext))
+
+                ext = np.zeros(int(max_val-dist_size+1))
+                distribution = np.concatenate((distribution, ext))
+
+            # for k in range(torch.numel(dists)):
+            #     distribution[dists[k]] += prods[k]
+
+            dists = dists.cpu()
+            dists = dists.numpy()
+            prods = prods.cpu()
+            prods = prods.numpy()
+
+            distribution = set_dist_vals(distribution, dists, prods)
+
+    # distribution_cpu = distribution.cpu()
+    # distribution_cpu = distribution_cpu.numpy()
+    distribution_cpu = distribution
+    return distribution_cpu
+
+
+@jit(nopython=True, cache=True)
+def assign_vals(distribution, dists, prods, one_over_bin_size):
+    max_val = int(dists.max()*one_over_bin_size+0.5)
+
+    if max_val > distribution.size:
+        ext = np.zeros(max_val-distribution.size+1)
+        distribution = np.concatenate((distribution, ext))
+
+    for k in range(dists.size):
+        distribution[int(dists[k]*one_over_bin_size+0.5)] += prods[k]
+
+@jit(nopython=True, cache=True)
+def set_dist_vals(distribution, dists, prods):
+    for k in range(dists.size):
+        distribution[dists[k]] += prods[k]
 
     return distribution
+
+# def inner_calculate_profile_real_gpu(coordinates, form_factors, one_over_bin_size):
+#     pass
+
+
+# test_kernel = cp.ElementwiseKernel(
+#     'raw T coord, raw T ff',
+#     'raw T dists, raw T prods',
+#     '''
+
+#     ''',
+#     'test_kernel'
+#     )
+
+@jit(nopython=True, cache=True)
+def test_mult(x, mult):
+    return np.multiply(x, mult)
